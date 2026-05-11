@@ -43,26 +43,27 @@ int main() {
 	if (builtin[i] == command_to_know) {
 	  std::cout << command_to_know << " is a shell builtin\n";
 	  found = true;
+	  break;
 	}
-	// 没有找到内部命令，看是不是可执行文件
-	if (!found) {
-	  // 获取环境变量
-	  std::string path_env = std::getenv("PATH");
-	  std::stringstream ss_path(path_env);
-	  std::string path;
-	  // 拆分环境变量
-	  while(std::getline(ss_path,path,PATH_LIST_SEPARATOR)) {
-	    std::string full_path = path + '/' + command_to_know;
-	    if(access(full_path.c_str(),X_OK) == 0) {
-	      std::cout << command_to_know << " is " << full_path << std::endl;
-	      found = true;
-	      break;
-	    }
-	  }  
-	}
-	if (!found) {
-	  std::cout << command_to_know << ": not found" << std::endl;
-	}
+      }
+      // 没有找到内部命令，看是不是可执行文件
+      if (!found) {
+	// 获取环境变量
+        std::string path_env = std::getenv("PATH");
+	std::stringstream ss_path(path_env);
+        std::string path;
+	// 拆分环境变量
+	while(std::getline(ss_path,path,PATH_LIST_SEPARATOR)) {
+          std::string full_path = path + '/' + command_to_know;
+	  if(access(full_path.c_str(),X_OK) == 0) {
+	    std::cout << command_to_know << " is " << full_path << std::endl;
+	    found = true;
+	    break;
+          }
+	}  
+      }
+      if (!found) {
+	std::cout << command_to_know << ": not found" << std::endl;
       }
     } else {
       std::cout << command << ": command not found" << std::endl;
