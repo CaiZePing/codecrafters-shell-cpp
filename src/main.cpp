@@ -6,7 +6,7 @@
 #include <sys/wait.h>
 #include <cstdlib>
 #include <cstring>
-
+#include <vector>
 
 #ifdef _WIN32
 constexpr char PATH_LIST_SEPARATOR = ';';
@@ -27,6 +27,7 @@ int main() {
   bool is_executable_found = false; // 是不是可执行文件
 
   while (true) {
+    is_executable_found = false;
     // TODO: Uncomment the code below to pass the first stage
     std::cout << "$ ";
     // get line
@@ -36,13 +37,16 @@ int main() {
     ss >> command;
     // check for exit
     if(command == "exit") {
+      is_executable_found = true;
       break;
     } else if(command == "echo") { // 如果指令为 echo
+      is_executable_found = true;
       std::string word;
       while(ss >> word) 
         std::cout << word << " ";
       std::cout << std::endl;
     } else if (command == "type") { // 如果指令为 type
+      is_executable_found = true;
       bool found = false; // 是否找到
       std::string builtin[3] = {"echo", "type", "exit"}; // 当前的内部命令
       std::string command_to_know; // type 后面接着的命令
@@ -81,7 +85,20 @@ int main() {
       std::string path_env = std::getenv("PATH");
       std::stringstream ss_path(path_env);
       std::string path;
-      char *argv[] = {const_cast<char*>(command.c_str()), nullptr};
+            // 解析所有参数
+      std::vector<std::string> args;
+      args.push_back(command); // 第一个参数是程序名
+      std::string arg;
+      while (ss >> arg) {
+        args.push_back(arg);
+      }
+      // 构建 argv 数组
+      std::vector<char *> argv;
+      for (size_t i = 0; i < args.size(); i++) {
+        argv.push_back(const_cast<char *>(args[i].c_str()));
+      }
+      argv.push_back(nullptr);
+
       // 拆分环境变量
       while(std::getline(ss_path,path,PATH_LIST_SEPARATOR)) {
         // 拼接路径名 + 文件名
@@ -89,7 +106,7 @@ int main() {
         // 查看是不是可执行文件
         if(access(full_path.c_str(),X_OK) == 0) {
           is_executable_found = true;
-          run_executable(full_path, argv);
+          run_executable(full_path, argv.data());
           break;
         }
       }
