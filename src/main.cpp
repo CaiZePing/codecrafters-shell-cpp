@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <fcntl.h>
 #include <iostream>
+#include <readline/readline.h>
 #include <sstream>
 #include <string>
 #include <sys/types.h>
@@ -19,9 +20,15 @@ constexpr char PATH_LIST_SEPARATOR = ':';
 using namespace std;
 namespace fs = filesystem;
 
+const unordered_set<string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd"};
+vector<string> PATH{};
+
 void populatePATH(const string& pathstring);
 string findCmdInPath(const string& cmd);
 
+char* builtinCompletionGenerator(const char *text, int state);
+char** shellCompletion(const char *text, int start, int end);
+bool readInput(string &input);
 vector<string> parseInput(const string& command);
 void handleInput(const string& parsed);
 void handleEcho(const vector<string>& parsed);
@@ -30,9 +37,6 @@ void handlepwd(const vector<string>& parsed);
 void handlecd(const vector<string>& parsed);
 
 void myexecv(const vector<string>& parsed);
-
-const unordered_set<string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd"};
-vector<string> PATH{};
 
 int main() {
   string input;
@@ -43,12 +47,14 @@ int main() {
   cout << unitbuf;
   cerr << unitbuf;
 
+  rl_attempted_completion_function = shellCompletion;
+  
   while (true) {
-    cout << "$ ";
-    getline(cin, input);
+    readInput(input);
     handleInput(input);
   }
 }
+
 // 将PATH环境变量分解成一个个路径，存储在全局变量PATH中
 void populatePATH(const string& pathstring) {
   stringstream ss(pathstring);
@@ -57,6 +63,7 @@ void populatePATH(const string& pathstring) {
     PATH.push_back(directory);
   }
 }
+
 // 查找是不是可执行文件，返回绝对路径，否则返回空字符串
 string findCmdInPath(const string& cmd) {
   for (string directory : PATH) {
@@ -73,6 +80,51 @@ string findCmdInPath(const string& cmd) {
 
   return "";
 }
+
+char* builtinCompletionGenerator(const char *text, int state) {
+  static size_t index = 0;
+  static int len;
+
+  if (state == 0) {
+    index = 0;
+    len = strlen(text);
+  }
+  // 利用迭代器
+  auto it = BUILTIN_COMMANDS.begin();
+  // 找到当前位置
+  for (size_t i = 0; i < index; i++) it++;
+  // 遍历
+  while (it != BUILTIN_COMMANDS.end()) {
+    index++;
+    if (strncmp(it->c_str(), text, len) == 0) {
+      return strdup(it->c_str());
+    }
+    it++;
+  }
+  return nullptr;
+}
+
+char** shellCompletion(const char *text, int start, int end) {
+  (void)end;
+  rl_attempted_completion_over = 1;
+
+  if(start != 0)
+    return nullptr;
+
+  rl_completion_append_character = ' ';
+  return rl_completion_matches(text, builtinCompletionGenerator);
+}
+
+bool readInput(string &input) {
+  char *line = readline("$ ");
+  if (line == nullptr)
+    return false;
+
+  input = line;
+  free(line);
+  return true;
+}
+
 // 分解输入命令
 vector<string> parseInput(const string& command) {
   vector<string> parsed;
@@ -108,6 +160,7 @@ vector<string> parseInput(const string& command) {
     parsed.push_back(current);
   return parsed;
 }
+
 // 处理输入
 void handleInput(const string& input) {
   auto parsed = parseInput(input);
@@ -147,8 +200,7 @@ void handleInput(const string& input) {
        * O_TRUNC       // 清空文件（给 > 用）
        * O_APPEND      // 追加（给 >> 用）
        */
-      int fd;
-      fd = open(file.c_str(), O_WRONLY | O_CREAT | (flag & 0b01 ? O_APPEND : O_TRUNC), 0644);
+      int fd = open(file.c_str(), O_WRONLY | O_CREAT | (flag & 0b01 ? O_APPEND : O_TRUNC), 0644);
       backup_who = flag & 0b10 ? 2 : 1;
       backup_stdout = dup(backup_who);
       dup2(fd, backup_who);
@@ -178,6 +230,7 @@ void handleInput(const string& input) {
     close(backup_stdout);
   }
 }
+
 // 处理echo命令，输出参数
 void handleEcho(const vector<string>& parsed) {
   for (size_t i = 1; i < parsed.size(); i++) {
@@ -186,6 +239,7 @@ void handleEcho(const vector<string>& parsed) {
 
   cout << endl;
 }
+
 // 处理type命令，判断参数是内置命令还是可执行文件
 void handleType(const vector<string>& parsed) {
   string command = parsed[0];
@@ -199,10 +253,12 @@ void handleType(const vector<string>& parsed) {
     cout << arg1 << ": not found" << endl;
   }
 }
+
 // 处理pwd命令，输出当前路径
 void handlepwd(const vector<string>& parsed) {
   cout << fs::current_path().string() << endl;
 }
+
 // 处理cd命令，切换当前路径
 void handlecd(const vector<string>& parsed) {
   if (parsed.size() < 2) {
@@ -216,10 +272,11 @@ void handlecd(const vector<string>& parsed) {
       cout << "cd: " << parsed[1] << ": No such file or directory" << endl;
       return;
     }
+    // 设置当前工作目录
     fs::current_path(newPath);
-  } else if (newPath[0] == '~'){
-    string homestring = getenv("HOME");
-    newPath.replace(0, 1, homestring);
+  } else if (newPath[0] == '~'){ // 用户目录
+    string homestring = getenv("HOME"); // 获取用户目录
+    newPath.replace(0, 1, homestring); // 将输入地址的 ~ 替换为用户目录
     if (!fs::exists(newPath) || !fs::is_directory(newPath)){
       cout << "cd: " << newPath << " No such file or directory" << endl;
       return;
@@ -234,6 +291,7 @@ void handlecd(const vector<string>& parsed) {
     fs::current_path(fullPath);
   }
 }
+
 // 执行外部命令，创建子进程，父进程等待子进程结束
 void myexecv(const vector<string>& parsed) {
   const char **argv = new const char *[parsed.size() + 1];
