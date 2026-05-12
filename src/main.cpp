@@ -130,6 +130,14 @@ void handleInput(const string& input) {
       file = parsed[parsed.size() - 1];
       parsed.pop_back();
       parsed.pop_back();
+      char flag = 0;
+      size_t size = redirection.size();
+      if (redirection == ">>" || redirection == "1>>" || redirection == "2>>") {
+        flag |= 0b01; // 第 0 位设为 1 → 追加
+      }
+      if (redirection == "2>" || redirection == "2>>") {
+        flag |= 0b10; // 第 1 位设为 1 → 标准错误输出重定向
+      }
       /**
        * open 函数有关参数
        * O_RDONLY      // 只读（给 < 输入重定向用）
@@ -140,24 +148,10 @@ void handleInput(const string& input) {
        * O_APPEND      // 追加（给 >> 用）
        */
       int fd;
-      if (redirection == ">" || redirection == "1>") {
-        fd = open(file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        backup_stdout = dup(1);
-        backup_who = 1;
-        dup2(fd, 1);
-      } else {
-        if (redirection[0] == '2'){
-          fd = open(file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-          backup_stdout = dup(2);
-          backup_who = 2;
-          dup2(fd, 2);
-        } else if (redirection == ">>" || redirection == "1>>") {
-          fd = open(file.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
-          backup_stdout = dup(1);
-          backup_who = 1;
-          dup2(fd, 1);
-        }
-      }
+      fd = open(file.c_str(), O_WRONLY | O_CREAT | (flag & 0b01 ? O_APPEND : O_TRUNC), 0644);
+      backup_who = flag & 0b10 ? 2 : 1;
+      backup_stdout = dup(backup_who);
+      dup2(fd, backup_who);
       close(fd);
     }
   }
