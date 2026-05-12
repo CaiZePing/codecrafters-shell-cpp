@@ -124,11 +124,16 @@ void handlepwd(const std::vector<std::string>& parsed) {
 }
 // 处理cd命令，切换当前路径
 void handlecd(const std::vector<std::string>& parsed) {
+  if (parsed.size() < 2) {
+    std::cout << "cd: missing operand" << std::endl;
+    return;
+  }
   // 获取从命令行输入的路径
   std::filesystem::path newPath = parsed[1];
   if (newPath[0] == '/') {
-    if (std::filesystem::exists(newPath) || std::filesystem::is_directory(newPath)) {
+    if (!std::filesystem::exists(newPath) || !std::filesystem::is_directory(newPath)) {
       std::cout << "cd: " << parsed[1] << ": No such file or directory" << std::endl;
+      return;
     }
     std::filesystem::current_path(newPath);
   }
