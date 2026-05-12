@@ -151,7 +151,7 @@ void handleInput(const string& input) {
           backup_stdout = dup(2);
           backup_who = 2;
           dup2(fd, 2);
-        } else if (redirection == ">>") {
+        } else if (redirection == ">>" || redirection == "1>>") {
           fd = open(file.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
           backup_stdout = dup(1);
           backup_who = 1;
