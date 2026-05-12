@@ -72,21 +72,27 @@ vector<string> parseInput(const string& command) {
   string current;
   bool isSingleQuote = false;
   bool isDoubleQuote = false;
+  bool isBackslash = false;
   bool isSpace = false;
 
   for (char c : command) {
-    if (c == '\'' && !isDoubleQuote) {
+    if (isBackslash) {
+      current += c;
+      isBackslash = false;
+    } else if (c == '\'' && !isDoubleQuote ) {
      isSingleQuote ^= 1;
      isSpace = false;
     } else if (c == '\"') {
-      isDoubleQuote ^= 1;
+      isDoubleQuote = true;
       isSpace = false;
+    } else if (c == '\\') {
+      isBackslash = true;
     } else if (c == ' ' && !isSingleQuote && !isDoubleQuote){
       if (isSpace) continue;
       parsed.push_back(current);
       current.clear();
       isSpace = true;
-    } else{
+    } else {
       current += c;
       isSpace = false;
     }
