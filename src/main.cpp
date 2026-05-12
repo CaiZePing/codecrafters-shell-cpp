@@ -9,56 +9,56 @@
 #include <unordered_set>
 #include <vector>
 
-
+using namespace std;
 namespace fs = filesystem;
 
-void populatePATH(const std::string& pathstring);
-std::string findCmdInPath(const std::string& cmd);
+void populatePATH(const string& pathstring);
+string findCmdInPath(const string& cmd);
 
-std::vector<std::string> parseInput(const std::string& command);
-void handleInput(const std::string& parsed);
-void handleEcho(const std::vector<std::string>& parsed);
-void handleType(const std::vector<std::string>& parsed);
-void handlepwd(const std::vector<std::string>& parsed);
-void handlecd(const std::vector<std::string>& parsed);
+vector<string> parseInput(const string& command);
+void handleInput(const string& parsed);
+void handleEcho(const vector<string>& parsed);
+void handleType(const vector<string>& parsed);
+void handlepwd(const vector<string>& parsed);
+void handlecd(const vector<string>& parsed);
 
-void myexecv(const std::vector<std::string>& parsed);
+void myexecv(const vector<string>& parsed);
 
-const std::unordered_set<std::string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd"};
-std::vector<std::string> PATH{};
+const unordered_set<string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd"};
+vector<string> PATH{};
 
 int main() {
-  std::string input;
-  std::string pathstring = getenv("PATH");
+  string input;
+  string pathstring = getenv("PATH");
   populatePATH(pathstring);
 
   // Flush after every cout / cerr
-  std::cout << std::unitbuf;
-  std::cerr << std::unitbuf;
+  cout << unitbuf;
+  cerr << unitbuf;
 
   while (true) {
-    std::cout << "$ ";
-    std::getline(std::cin, input);
+    cout << "$ ";
+    getline(cin, input);
     handleInput(input);
   }
 }
 // 将PATH环境变量分解成一个个路径，存储在全局变量PATH中
-void populatePATH(const std::string& pathstring) {
-  std::stringstream ss{pathstring};
-  std::string patharg;
-  while (std::getline(ss, patharg, ':')) {
+void populatePATH(const string& pathstring) {
+  stringstream ss{pathstring};
+  string patharg;
+  while (getline(ss, patharg, ':')) {
     PATH.push_back(patharg);
   }
 }
 // 查找是不是可执行文件，返回绝对路径，否则返回空字符串
-std::string findCmdInPath(const std::string& cmd) {
-  for (std::string directory : PATH) {
-    std::fs::path fullPath = std::fs::path(directory) / cmd;
+string findCmdInPath(const string& cmd) {
+  for (string directory : PATH) {
+    fs::path fullPath = fs::path(directory) / cmd;
 
-    if (std::fs::exists(fullPath)) {
-      auto perms = std::fs::status(fullPath).permissions();
-      if ((perms & (std::fs::perms::group_exec | std::fs::perms::owner_exec |
-                    std::fs::perms::others_exec)) == std::fs::perms::none)
+    if (fs::exists(fullPath)) {
+      auto perms = fs::status(fullPath).permissions();
+      if ((perms & (fs::perms::group_exec | fs::perms::owner_exec |
+                    fs::perms::others_exec)) == fs::perms::none)
         continue;
       return fullPath.string();
     }
@@ -67,19 +67,19 @@ std::string findCmdInPath(const std::string& cmd) {
   return "";
 }
 // 分解输入命令
-std::vector<std::string> parseInput(const std::string& command) {
-  std::stringstream ss{command};
-  std::vector<std::string> parsed{};
-  std::string commandArg;
+vector<string> parseInput(const string& command) {
+  stringstream ss{command};
+  vector<string> parsed{};
+  string commandArg;
 
-  while (std::getline(ss, commandArg, ' ')) {
+  while (getline(ss, commandArg, ' ')) {
     parsed.push_back(commandArg);
   }
 
   return parsed;
 }
 // 处理输入
-void handleInput(const std::string& input) {
+void handleInput(const string& input) {
   auto parsed = parseInput(input);
   auto command = parsed[0];
 
@@ -96,59 +96,59 @@ void handleInput(const std::string& input) {
   } else if (findCmdInPath(command) != "") {
     myexecv(parsed);
   } else {
-    std::cout << command << ": command not found" << std::endl;
+    cout << command << ": command not found" << endl;
   }
 }
 // 处理echo命令，输出参数
-void handleEcho(const std::vector<std::string>& parsed) {
+void handleEcho(const vector<string>& parsed) {
   for (size_t i = 1; i < parsed.size(); i++) {
-    std::cout << parsed[i] << " ";
+    cout << parsed[i] << " ";
   }
 
-  std::cout << std::endl;
+  cout << endl;
 }
 // 处理type命令，判断参数是内置命令还是可执行文件
-void handleType(const std::vector<std::string>& parsed) {
-  std::string command = parsed[0];
-  std::string arg1 = parsed[1];
+void handleType(const vector<string>& parsed) {
+  string command = parsed[0];
+  string arg1 = parsed[1];
 
   if (BUILTIN_COMMANDS.count(arg1) > 0) {
-    std::cout << arg1 << " is a shell builtin" << std::endl;
+    cout << arg1 << " is a shell builtin" << endl;
   } else if (findCmdInPath(arg1) != "") {
-    std::cout << arg1 << " is " << findCmdInPath(arg1) << std::endl;
+    cout << arg1 << " is " << findCmdInPath(arg1) << endl;
   } else {
-    std::cout << arg1 << ": not found" << std::endl;
+    cout << arg1 << ": not found" << endl;
   }
 }
 // 处理pwd命令，输出当前路径
-void handlepwd(const std::vector<std::string>& parsed) {
-  std::cout << std::fs::current_path().string() << std::endl;
+void handlepwd(const vector<string>& parsed) {
+  cout << fs::current_path().string() << endl;
 }
 // 处理cd命令，切换当前路径
-void handlecd(const std::vector<std::string>& parsed) {
+void handlecd(const vector<string>& parsed) {
   if (parsed.size() < 2) {
-    std::cout << "cd: missing operand" << std::endl;
+    cout << "cd: missing operand" << endl;
     return;
   }
   // 获取从命令行输入的路径
-  std::string newPath = parsed[1];
+  string newPath = parsed[1];
   if (newPath[0] == '/') {
-    if (!std::fs::exists(newPath) || !std::fs::is_directory(newPath)) {
-      std::cout << "cd: " << parsed[1] << ": No such file or directory" << std::endl;
+    if (!fs::exists(newPath) || !fs::is_directory(newPath)) {
+      cout << "cd: " << parsed[1] << ": No such file or directory" << endl;
       return;
     }
-    std::fs::current_path(newPath);
+    fs::current_path(newPath);
   } else {
-    std::fs::path fullPath = std::fs::current_path() / std::fs::path(newPath);
-    if (!std::fs::exists(fullPath) | ! std::fs::is_directory(fullPath)){
-      std::cout << "cd: " << newPath << ": No such file or directory" << std::endl;
+    fs::path fullPath = fs::current_path() / fs::path(newPath);
+    if (!fs::exists(fullPath) | ! fs::is_directory(fullPath)){
+      cout << "cd: " << newPath << ": No such file or directory" << endl;
       return; 
     }
-    std::fs::current_path(fullPath);
+    fs::current_path(fullPath);
   }
 }
 // 执行外部命令，创建子进程，父进程等待子进程结束
-void myexecv(const std::vector<std::string>& parsed) {
+void myexecv(const vector<string>& parsed) {
   const char **argv = new const char *[parsed.size() + 1];
   for (int j = 0; j < parsed.size(); ++j)
     argv[j] = parsed[j].c_str();
