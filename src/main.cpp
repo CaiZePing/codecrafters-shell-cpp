@@ -21,31 +21,33 @@ using namespace std;
 namespace fs = filesystem;
 
 const unordered_set<string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd"};
-vector<string> PATH{};
+vector<string> PATH{};          // 存储PATH环境变量中的所有路径
+vector<string> executables{};   // 存储所有可执行文件
 
-void populatePATH(const string& pathstring);
-string findCmdInPath(const string& cmd);
+void clear();                                 // 清屏
+void populatePATH(const string& pathstring);  // 将PATH环境变量分解成一个个路径
+string findCmdInPath(const string& cmd);      // 在PATH中查找命令
+void cacheAllExecutables();                   // 缓存所有可执行文件
 
-char* builtinCompletionGenerator(const char *text, int state);
-char** shellCompletion(const char *text, int start, int end);
-bool readInput(string &input);
-vector<string> parseInput(const string& command);
-void handleInput(const string& parsed);
-void handleEcho(const vector<string>& parsed);
-void handleType(const vector<string>& parsed);
-void handlepwd(const vector<string>& parsed);
-void handlecd(const vector<string>& parsed);
+char* builtinCompletionGenerator(const char *text, int state);  // 命令补全生成器
+char** shellCompletion(const char *text, int start, int end);   // shell补全函数
+bool readInput(string &input);                                  // 读取用户输入
+vector<string> parseInput(const string& command);               // 解析输入命令
+void handleInput(const string& parsed);                         // 处理输入
+void handleEcho(const vector<string>& parsed);                  // 处理 echo
+void handleType(const vector<string>& parsed);                  // 处理 type
+void handlepwd(const vector<string>& parsed);                   // 处理 pwd
+void handlecd(const vector<string>& parsed);                    // 处理 cd
 
-void myexecv(const vector<string>& parsed);
+void myexecv(const vector<string>& parsed);                     // 执行命令
 
 int main() {
   string input;
   string pathstring = getenv("PATH");
   populatePATH(pathstring);
-
+  cacheAllExecutables();
   // Flush after every cout / cerr
-  cout << unitbuf;
-  cerr << unitbuf;
+  clear();
 
   rl_attempted_completion_function = shellCompletion;
   
@@ -53,6 +55,11 @@ int main() {
     readInput(input);
     handleInput(input);
   }
+}
+
+void clear() {
+  cout << unitbuf;
+  cerr << unitbuf;
 }
 
 // 将PATH环境变量分解成一个个路径，存储在全局变量PATH中
@@ -81,25 +88,59 @@ string findCmdInPath(const string& cmd) {
   return "";
 }
 
+void cacheAllExecutables() {
+  if (!executables.empty()) return;
+
+  unordered_set<string> seen;
+
+  for (const auto& dir : PATH) {
+    try {
+      if (!fs::exists(dir) || !fs::is_directory(dir))
+        continue;
+  
+      for (const auto& entry : fs::directory_iterator(dir)) {
+        if (!entry.is_regular_file())
+          continue;
+  
+        auto perms = entry.status().permissions();
+        if ((perms & (fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec)) == fs::perms::none)
+          continue;
+  
+        string name = entry.path().filename().string();
+        if (seen.count(name)) continue;
+  
+        seen.insert(name);
+        executables.push_back(name);
+      }
+    } catch (const fs::filesystem_error& ex) {
+      cerr << "Error occurred while accessing filesystem: " << ex.what() << endl;
+      continue;
+    }
+  }
+}
+
 char* builtinCompletionGenerator(const char *text, int state) {
+  static vector<string> candidates;
   static size_t index = 0;
   static int len;
 
   if (state == 0) {
     index = 0;
     len = strlen(text);
+
+    // 先把内置命令加进去
+    candidates.assign(BUILTIN_COMMANDS.begin(), BUILTIN_COMMANDS.end());
+
+    // 再把 PATH 里所有可执行文件加进去
+    cacheAllExecutables();
+    candidates.insert(candidates.end(), executables.begin(), executables.end());
   }
-  // 利用迭代器
-  auto it = BUILTIN_COMMANDS.begin();
-  // 找到当前位置
-  for (size_t i = 0; i < index; i++) it++;
-  // 遍历
-  while (it != BUILTIN_COMMANDS.end()) {
-    index++;
-    if (strncmp(it->c_str(), text, len) == 0) {
-      return strdup(it->c_str());
+
+  while (index < candidates.size()) {
+    string& cmd = candidates[index++];
+    if (strncmp(cmd.c_str(), text, len) == 0) {
+        return strdup(cmd.c_str());
     }
-    it++;
   }
   return nullptr;
 }
@@ -112,7 +153,13 @@ char** shellCompletion(const char *text, int start, int end) {
     return nullptr;
 
   rl_completion_append_character = ' ';
-  return rl_completion_matches(text, builtinCompletionGenerator);
+  
+  char** matches = rl_completion_matches(text, builtinCompletionGenerator);
+
+  if (!matches)
+    cout << "\a" << flush;
+  
+  return matches;
 }
 
 bool readInput(string &input) {
@@ -164,6 +211,9 @@ vector<string> parseInput(const string& command) {
 // 处理输入
 void handleInput(const string& input) {
   auto parsed = parseInput(input);
+  if (parsed.empty()) {
+    return;
+  }
   auto command = parsed[0];
   // 备份标准输出
   int backup_stdout = 0;
@@ -218,6 +268,8 @@ void handleInput(const string& input) {
     handlepwd(parsed);
   } else if (command == "cd") {
     handlecd(parsed);
+  } else if (command == "clear") {
+    clear();
   } else if (findCmdInPath(command) != "") {
     myexecv(parsed);
   } else {
