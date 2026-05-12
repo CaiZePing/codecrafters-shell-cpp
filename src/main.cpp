@@ -82,10 +82,10 @@ vector<string> parseInput(const string& command) {
     } else if (c == '\'' && !isDoubleQuote ) {
      isSingleQuote ^= 1;
      isSpace = false;
-    } else if (c == '\"') {
+    } else if (c == '\"' && !isSingleQuote) {
       isDoubleQuote ^= 1;
       isSpace = false;
-    } else if (c == '\\') {
+    } else if (c == '\\' && !isSingleQuote) {
       isBackslash = true;
     } else if (c == ' ' && !isSingleQuote && !isDoubleQuote){
       if (isSpace) continue;
