@@ -83,7 +83,7 @@ vector<string> parseInput(const string& command) {
      isSingleQuote ^= 1;
      isSpace = false;
     } else if (c == '\"') {
-      isDoubleQuote = true;
+      isDoubleQuote ^= 1;
       isSpace = false;
     } else if (c == '\\') {
       isBackslash = true;
