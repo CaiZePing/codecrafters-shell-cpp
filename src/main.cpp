@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <filesystem>
+#include <fcntl.h>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -8,6 +9,12 @@
 #include <unistd.h>
 #include <unordered_set>
 #include <vector>
+
+#ifdef _WIN32
+constexpr char PATH_LIST_SEPARATOR = ';';
+#else
+constexpr char PATH_LIST_SEPARATOR = ':';
+#endif
 
 using namespace std;
 namespace fs = filesystem;
@@ -44,10 +51,10 @@ int main() {
 }
 // 将PATH环境变量分解成一个个路径，存储在全局变量PATH中
 void populatePATH(const string& pathstring) {
-  stringstream ss{pathstring};
-  string patharg;
-  while (getline(ss, patharg, ':')) {
-    PATH.push_back(patharg);
+  stringstream ss(pathstring);
+  string directory;
+  while (getline(ss, directory, PATH_LIST_SEPARATOR)) {
+    PATH.push_back(directory);
   }
 }
 // 查找是不是可执行文件，返回绝对路径，否则返回空字符串
@@ -105,12 +112,39 @@ vector<string> parseInput(const string& command) {
 void handleInput(const string& input) {
   auto parsed = parseInput(input);
   auto command = parsed[0];
-
+  // 备份标准输出
+  int backup_stdout = dup(1);
+  bool write_into_file = false;
+  string file;
   // for (int i = 0; i < parsed.size(); ++i) {
   //   cout << "parsed[" << i << "]: " << parsed[i] << endl;
   // }
   // cout << endl;
   // cout << "handleInput: " << command << endl;
+
+  if (parsed.size() > 2) {
+    if (parsed[parsed.size() - 2] == ">" || parsed[parsed.size() - 2] == "1>") {
+      write_into_file = true;
+      file = parsed[parsed.size() - 1];
+      parsed.pop_back();
+      parsed.pop_back();
+      /**
+       * open 函数有关参数
+       * O_RDONLY      // 只读（给 < 输入重定向用）
+       * O_WRONLY      // 只写（给 > >> 输出重定向用）
+       * O_RDWR        // 读写
+       * O_CREAT       // 文件不存在就创建
+       * O_TRUNC       // 清空文件（给 > 用）
+       * O_APPEND      // 追加（给 >> 用）
+       */
+      int fd = open(file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+      if (fd != -1) {
+	dup2(fd,1);
+	close(fd);
+      }
+    }
+  }
+  
   if (command == "exit") {
     exit(0);
   } else if (command == "echo") {
@@ -126,6 +160,10 @@ void handleInput(const string& input) {
   } else {
     cout << command << ": command not found" << endl;
   }
+
+  // 将输出重定向回标准输出
+  dup2(backup_stdout,1);
+  close(backup_stdout);
 }
 // 处理echo命令，输出参数
 void handleEcho(const vector<string>& parsed) {
