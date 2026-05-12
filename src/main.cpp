@@ -1,145 +1,136 @@
+#include <cstdlib>
+#include <filesystem>
 #include <iostream>
-#include <ranges>
 #include <sstream>
 #include <string>
-#include <unistd.h>
+#include <sys/types.h>
 #include <sys/wait.h>
-#include <cstdlib>
-#include <cstring>
+#include <unistd.h>
+#include <unordered_set>
 #include <vector>
 
-#ifdef _WIN32
-constexpr char PATH_LIST_SEPARATOR = ';';
-#else
-constexpr char PATH_LIST_SEPARATOR = ':';
-#endif
-// 查看是不是可执行文件
-bool is_executable(const std::string& path);
-// 运行可执行文件
-bool run_executable(const std::string& path, char* const argv[]);
+
+void populatePATH(std::string pathstring);
+std::string findCmdInPath(std::string cmd);
+
+std::vector<std::string> parseInput(std::string command);
+void handleInput(std::string command);
+void handleEcho(std::vector<std::string> command);
+void handleType(std::vector<std::string> command);
+void handlepwd(std::vector<std::string> parsed);
+
+void myexecv(std::vector<std::string> parsed);
+
+const std::unordered_set<std::string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd"};
+std::vector<std::string> PATH{};
 
 int main() {
-  // Flush after every std::cout / std:cerr
+  std::string input;
+  std::string pathstring = getenv("PATH");
+  populatePATH(pathstring);
+
+  // Flush after every cout / cerr
   std::cout << std::unitbuf;
   std::cerr << std::unitbuf;
-  std::string line;
-  std::string command;
-  bool is_executable_found = false; // 是不是可执行文件
 
   while (true) {
-    is_executable_found = false;
-    // TODO: Uncomment the code below to pass the first stage
     std::cout << "$ ";
-    // get line
-    std::getline(std::cin, line);
-    // parse command
-    std::stringstream ss(line);
-    ss >> command;
-    // check for exit
-    if(command == "exit") {
-      is_executable_found = true;
-      break;
-    } else if(command == "echo") { // 如果指令为 echo
-      is_executable_found = true;
-      std::string word;
-      while(ss >> word) 
-        std::cout << word << " ";
-      std::cout << std::endl;
-    } else if (command == "type") { // 如果指令为 type
-      is_executable_found = true;
-      bool found = false; // 是否找到
-      std::string builtin[3] = {"echo", "type", "exit"}; // 当前的内部命令
-      std::string command_to_know; // type 后面接着的命令
-      ss >> command_to_know;
-      // 将当前的内部命令遍历一遍，查找一下是不是内部命令
-      for (int i = 0; i < sizeof(builtin)/sizeof(builtin[0]); i++) {
-	      if (builtin[i] == command_to_know) {
-	        std::cout << command_to_know << " is a shell builtin\n";
-	        found = true;
-	        break;
-	      }
-      }
-      // 没有找到内部命令，看是不是可执行文件
-      if (!found) {
-	      // 获取环境变量
-        std::string path_env = std::getenv("PATH");
-	      std::stringstream ss_path(path_env);
-        std::string path;
-	      // 拆分环境变量
-	      while(std::getline(ss_path,path,PATH_LIST_SEPARATOR)) {
-          // 拼接路径名 + 文件名
-          std::string full_path = path + '/' + command_to_know;
-          // 查看是不是可执行文件
-          if(access(full_path.c_str(),X_OK) == 0) {
-            std::cout << command_to_know << " is " << full_path << std::endl;
-            found = true;
-            break;
-          }
-	      }
-      }
-      if (!found) {
-	      std::cout << command_to_know << ": not found" << std::endl;
-      }
-    } else {
-      // 获取环境变量
-      std::string path_env = std::getenv("PATH");
-      std::stringstream ss_path(path_env);
-      std::string path;
-            // 解析所有参数
-      std::vector<std::string> args;
-      args.push_back(command); // 第一个参数是程序名
-      std::string arg;
-      while (ss >> arg) {
-        args.push_back(arg);
-      }
-      // 构建 argv 数组
-      std::vector<char *> argv;
-      for (size_t i = 0; i < args.size(); i++) {
-        argv.push_back(const_cast<char *>(args[i].c_str()));
-      }
-      argv.push_back(nullptr);
-
-      // 拆分环境变量
-      while(std::getline(ss_path,path,PATH_LIST_SEPARATOR)) {
-        // 拼接路径名 + 文件名
-        std::string full_path = path + '/' + command;
-        // 查看是不是可执行文件
-        if(access(full_path.c_str(),X_OK) == 0) {
-          is_executable_found = true;
-          run_executable(full_path, argv.data());
-          break;
-        }
-      }
-    }
-    if (!is_executable_found) {
-      std::cout << command << ": command not found" << std::endl;
-    }
+    std::getline(std::cin, input);
+    handleInput(input);
   }
 }
-// 查看是不是可执行文件
-bool is_executable(const std::string& path) {
-  return access(path.c_str(), X_OK) == 0;
+
+void populatePATH(std::string pathstring) {
+  std::stringstream ss{pathstring};
+  std::string patharg;
+  while (std::getline(ss, patharg, ':')) {
+    PATH.push_back(patharg);
+  }
 }
 
-// 运行可执行文件
-bool run_executable(const std::string& path, char* const argv[])
-{
-  // 开一个新的进程
-  pid_t pid = fork();
-  if (pid == -1) {
-    std::cerr << "Failed to fork process\n";
-    return false;
-  } else if (pid == 0) {
-    // 在子进程中执行可执行文件
-    execv(path.c_str(), argv);
-    // 如果 execv 返回，说明执行失败
-    std::cerr << "Failed to execute " << path << "\n";
-    exit(1);
+std::string findCmdInPath(std::string cmd) {
+  for (std::string directory : PATH) {
+    std::filesystem::path fullPath = std::filesystem::path(directory) / cmd;
+
+    if (std::filesystem::exists(fullPath)) {
+      auto perms = std::filesystem::status(fullPath).permissions();
+      if ((perms & (std::filesystem::perms::group_exec | std::filesystem::perms::owner_exec |
+                    std::filesystem::perms::others_exec)) == std::filesystem::perms::none)
+        continue;
+      return fullPath.string();
+    }
+  }
+
+  return "";
+}
+
+std::vector<std::string> parseInput(std::string command) {
+  std::stringstream ss{command};
+  std::vector<std::string> parsed{};
+  std::string commandArg;
+
+  while (std::getline(ss, commandArg, ' ')) {
+    parsed.push_back(commandArg);
+  }
+
+  return parsed;
+}
+
+void handleInput(std::string input) {
+  auto parsed = parseInput(input);
+  auto command = parsed[0];
+
+  if (command == "exit") {
+    exit(0);
+  } else if (command == "echo") {
+    handleEcho(parsed);
+  } else if (command == "type") {
+    handleType(parsed);
+  } else if (command == "pwd") {
+    handlepwd(parsed);
+  } else if (findCmdInPath(command) != "") {
+    myexecv(parsed);
   } else {
-    // 在父进程中等待子进程结束
-    int status;
-    waitpid(pid, &status, 0);
-    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+    std::cout << command << ": command not found" << std::endl;
   }
-  return 0;
+}
+
+void handleEcho(std::vector<std::string> parsed) {
+  for (size_t i = 1; i < parsed.size(); i++) {
+    std::cout << parsed[i] << " ";
+  }
+
+  std::cout << std::endl;
+}
+
+void handleType(std::vector<std::string> parsed) {
+  std::string command = parsed[0];
+  std::string arg1 = parsed[1];
+
+  if (BUILTIN_COMMANDS.count(arg1) > 0) {
+    std::cout << arg1 << " is a shell builtin" << std::endl;
+  } else if (findCmdInPath(arg1) != "") {
+    std::cout << arg1 << " is " << findCmdInPath(arg1) << std::endl;
+  } else {
+    std::cout << arg1 << ": not found" << std::endl;
+  }
+}
+
+void handlepwd(std::vector<std::string> parsed) {
+  std::cout << std::filesystem::current_path().string() << std::endl;
+}
+
+void myexecv(std::vector<std::string> parsed) {
+  const char **argv = new const char *[parsed.size() + 1];
+  for (int j = 0; j < parsed.size(); ++j)
+    argv[j] = parsed[j].c_str();
+  argv[parsed.size()] = NULL;
+
+  pid_t pid = fork();
+  if (pid == 0) {
+    execvp(argv[0], (char **)argv);
+  } else {
+    int status;
+    wait(&status);
+  }
 }
