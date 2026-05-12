@@ -79,14 +79,14 @@ vector<string> parseInput(const string& command) {
      isSingleQuote ^= 1;
      isSpace = false;
     } else if (c == '\"') {
-      isDoubleQuote = true;
+      isDoubleQuote ^= 1;
       isSpace = false;
     } else if (c == ' ' && !isSingleQuote && !isDoubleQuote){
       if (isSpace) continue;
       parsed.push_back(current);
       current.clear();
       isSpace = true;
-    } else {
+    } else{
       current += c;
       isSpace = false;
     }
