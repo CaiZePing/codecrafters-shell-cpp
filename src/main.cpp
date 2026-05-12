@@ -139,19 +139,26 @@ void handleInput(const string& input) {
        * O_TRUNC       // 清空文件（给 > 用）
        * O_APPEND      // 追加（给 >> 用）
        */
-      int fd = open(file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-      if (fd != -1) {
-	if (redirection[0] == '2'){
-	  backup_stdout = dup(2);
-	  backup_who = 2;
-	  dup2(fd, 2);
-	} else {
-	  backup_stdout = dup(1);
-	  backup_who = 1;
-	  dup2(fd, 1);
-	}
-	close(fd);
+      int fd;
+      if (redirection == ">" || redrection == "1>") {
+        fd = open(file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        backup_stdout = dup(1);
+        backup_who = 1;
+        dup2(fd, 1);
+      } else {
+        if (redirection[0] == '2'){
+          fd = open(file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+          backup_stdout = dup(2);
+          backup_who = 2;
+          dup2(fd, 2);
+        } else if (redirection == ">>") {
+          fd = open(file.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
+          backup_stdout = dup(1);
+          backup_who = 1;
+          dup2(fd, 1);
+        }
       }
+      close(fd);
     }
   }
   
