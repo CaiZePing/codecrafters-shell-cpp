@@ -113,7 +113,8 @@ void handleInput(const string& input) {
   auto parsed = parseInput(input);
   auto command = parsed[0];
   // 备份标准输出
-  int backup_stdout = dup(1);
+  int backup_stdout = 0;
+  int backup_who = -1;
   bool write_into_file = false;
   string file;
   // for (int i = 0; i < parsed.size(); ++i) {
@@ -123,7 +124,8 @@ void handleInput(const string& input) {
   // cout << "handleInput: " << command << endl;
 
   if (parsed.size() > 2) {
-    if (parsed[parsed.size() - 2] == ">" || parsed[parsed.size() - 2] == "1>") {
+    string redirection = parsed[parsed.size() - 2];
+    if (redirection.back() == '>') {
       write_into_file = true;
       file = parsed[parsed.size() - 1];
       parsed.pop_back();
@@ -139,7 +141,15 @@ void handleInput(const string& input) {
        */
       int fd = open(file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
       if (fd != -1) {
-	dup2(fd,1);
+	if (redirection[0] == '2'){
+	  backup_stdout = dup(2);
+	  backup_who = 2;
+	  dup2(fd, 2);
+	} else {
+	  backup_stdout = dup(1);
+	  backup_who = 1;
+	  dup2(fd, 1);
+	}
 	close(fd);
       }
     }
@@ -162,8 +172,10 @@ void handleInput(const string& input) {
   }
 
   // 将输出重定向回标准输出
-  dup2(backup_stdout,1);
-  close(backup_stdout);
+  if (write_into_file) {
+    dup2(backup_stdout,backup_who);
+    close(backup_stdout);
+  }
 }
 // 处理echo命令，输出参数
 void handleEcho(const vector<string>& parsed) {
