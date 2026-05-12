@@ -10,6 +10,8 @@
 #include <vector>
 
 
+namespace fs = filesystem;
+
 void populatePATH(const std::string& pathstring);
 std::string findCmdInPath(const std::string& cmd);
 
@@ -51,12 +53,12 @@ void populatePATH(const std::string& pathstring) {
 // 查找是不是可执行文件，返回绝对路径，否则返回空字符串
 std::string findCmdInPath(const std::string& cmd) {
   for (std::string directory : PATH) {
-    std::filesystem::path fullPath = std::filesystem::path(directory) / cmd;
+    std::fs::path fullPath = std::fs::path(directory) / cmd;
 
-    if (std::filesystem::exists(fullPath)) {
-      auto perms = std::filesystem::status(fullPath).permissions();
-      if ((perms & (std::filesystem::perms::group_exec | std::filesystem::perms::owner_exec |
-                    std::filesystem::perms::others_exec)) == std::filesystem::perms::none)
+    if (std::fs::exists(fullPath)) {
+      auto perms = std::fs::status(fullPath).permissions();
+      if ((perms & (std::fs::perms::group_exec | std::fs::perms::owner_exec |
+                    std::fs::perms::others_exec)) == std::fs::perms::none)
         continue;
       return fullPath.string();
     }
@@ -120,7 +122,7 @@ void handleType(const std::vector<std::string>& parsed) {
 }
 // 处理pwd命令，输出当前路径
 void handlepwd(const std::vector<std::string>& parsed) {
-  std::cout << std::filesystem::current_path().string() << std::endl;
+  std::cout << std::fs::current_path().string() << std::endl;
 }
 // 处理cd命令，切换当前路径
 void handlecd(const std::vector<std::string>& parsed) {
@@ -131,11 +133,18 @@ void handlecd(const std::vector<std::string>& parsed) {
   // 获取从命令行输入的路径
   std::string newPath = parsed[1];
   if (newPath[0] == '/') {
-    if (!std::filesystem::exists(newPath) || !std::filesystem::is_directory(newPath)) {
+    if (!std::fs::exists(newPath) || !std::fs::is_directory(newPath)) {
       std::cout << "cd: " << parsed[1] << ": No such file or directory" << std::endl;
       return;
     }
-    std::filesystem::current_path(newPath);
+    std::fs::current_path(newPath);
+  } else {
+    std::fs::path fullPath = std::fs::current_path() / std::fs::path(newPath);
+    if (!std::fs::exists(fullPath) | ! std::fs::is_directory(fullPath)){
+      std::cout << "cd: " << newPath << ": No such file or directory" << std::endl;
+      return; 
+    }
+    std::fs::current_path(fullPath);
   }
 }
 // 执行外部命令，创建子进程，父进程等待子进程结束
