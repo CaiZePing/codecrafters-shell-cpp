@@ -138,9 +138,17 @@ void handlecd(const vector<string>& parsed) {
       return;
     }
     fs::current_path(newPath);
+  } else if (newPath[0] == '~'){
+    string homestring = getenv("HOME");
+    newPath.replace(0, 1, homestring);
+    if (!fs::exists(newPath) || !fs::is_directory(newPath)){
+      cout << "cd: " << newPath << " No such file or directory" << endl;
+      return;
+    }
+    fs::current_path(newPath);
   } else {
     fs::path fullPath = fs::current_path() / fs::path(newPath);
-    if (!fs::exists(fullPath) | ! fs::is_directory(fullPath)){
+    if (!fs::exists(fullPath) || ! fs::is_directory(fullPath)){
       cout << "cd: " << newPath << ": No such file or directory" << endl;
       return; 
     }
