@@ -140,7 +140,7 @@ void handleInput(const string& input) {
        * O_APPEND      // 追加（给 >> 用）
        */
       int fd;
-      if (redirection == ">" || redrection == "1>") {
+      if (redirection == ">" || redirection == "1>") {
         fd = open(file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
         backup_stdout = dup(1);
         backup_who = 1;
