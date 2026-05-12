@@ -129,7 +129,7 @@ void handlecd(const std::vector<std::string>& parsed) {
     return;
   }
   // 获取从命令行输入的路径
-  std::filesystem::path newPath = parsed[1];
+  std::string newPath = parsed[1];
   if (newPath[0] == '/') {
     if (!std::filesystem::exists(newPath) || !std::filesystem::is_directory(newPath)) {
       std::cout << "cd: " << parsed[1] << ": No such file or directory" << std::endl;
