@@ -68,14 +68,21 @@ string findCmdInPath(const string& cmd) {
 }
 // 分解输入命令
 vector<string> parseInput(const string& command) {
-  stringstream ss{command};
-  vector<string> parsed{};
-  string commandArg;
+  vector<string> parsed;
+  string current;
+  bool isSingleQuote = false;
 
-  while (getline(ss, commandArg, ' ')) {
-    parsed.push_back(commandArg);
+  for (char c : command) {
+    if (c == '\'') isSingleQuote ^= 1;
+    else if (c == ' ' && !isSingleQuote){
+      parsed.push_back(current);
+      current.clear();
+    } else {
+      current += c;
+    }
   }
-
+  if (!current.empty())
+    parsed.push_back(current);
   return parsed;
 }
 // 处理输入
@@ -83,6 +90,11 @@ void handleInput(const string& input) {
   auto parsed = parseInput(input);
   auto command = parsed[0];
 
+  // for (int i = 0; i < parsed.size(); ++i) {
+  //   cout << "parsed[" << i << "]: " << parsed[i] << endl;
+  // }
+  // cout << endl;
+  // cout << "handleInput: " << command << endl;
   if (command == "exit") {
     exit(0);
   } else if (command == "echo") {
