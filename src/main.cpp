@@ -71,14 +71,21 @@ vector<string> parseInput(const string& command) {
   vector<string> parsed;
   string current;
   bool isSingleQuote = false;
+  bool isSpace = false;
 
   for (char c : command) {
-    if (c == '\'') isSingleQuote ^= 1;
+    if (c == '\'') {
+     isSingleQuote ^= 1;
+     isSpace = false;
+    }
     else if (c == ' ' && !isSingleQuote){
+      if (isSpace) continue;
       parsed.push_back(current);
       current.clear();
+      isSpace = true;
     } else {
       current += c;
+      isSpace = false;
     }
   }
   if (!current.empty())
