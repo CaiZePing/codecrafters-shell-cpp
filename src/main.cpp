@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <iostream>
 #include <readline/readline.h>
+#include <readline/history.h> // 新增：支持历史记录
 #include <sstream>
 #include <string>
 #include <sys/types.h>
@@ -22,11 +23,10 @@ constexpr char PATH_LIST_SEPARATOR = ':';
 using namespace std;
 namespace fs = filesystem;
 
-const unordered_set<string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd" ,"complete"};
+const unordered_set<string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd", "complete"};
 vector<string> PATH{};              // 存储PATH环境变量中的所有路径
 vector<string> executables{};       // 存储所有可执行文件
 unordered_map<string, string> completes{}; // 存储注册命令
-bool only_dir = false;
 
 void clear();                                 // 清屏
 void populatePATH(const string& pathstring);  // 将PATH环境变量分解成一个个路径
@@ -34,6 +34,7 @@ string findCmdInPath(const string& cmd);      // 在PATH中查找命令
 void cacheAllExecutables();                   // 缓存所有可执行文件
 
 char* builtinCompletionGenerator(const char *text, int state);  // 命令补全生成器
+char* externalCompletionGenerator(const char *text, int state); // 外部命令补全生成器
 char* fileCompletionGenerator(const char *text, int state);     // 文件补全生成器
 char** shellCompletion(const char *text, int start, int end);   // shell补全函数
 
@@ -47,19 +48,30 @@ void handlecd(const vector<string>& parsed);                    // 处理 cd
 void handlecomplete(const vector<string> parsed);               // 处理 complete
 
 void myexecv(const vector<string>& parsed);                     // 执行命令
+string pipeexecv(const vector<string>& parsed);                 // 执行管道命令并捕获输出
 
 int main() {
   string input;
   string pathstring = getenv("PATH");
   populatePATH(pathstring);
   cacheAllExecutables();
+  
   // Flush after every cout / cerr
   clear();
 
+  // 启用历史记录
+  using_history();
   rl_attempted_completion_function = shellCompletion;
   
   while (true) {
-    readInput(input);
+    if (!readInput(input)) {
+      // 用户按下 Ctrl+D 退出
+      cout << endl;
+      exit(0);
+    }
+    if (!input.empty()) {
+      add_history(input.c_str()); // 添加到历史记录
+    }
     handleInput(input);
   }
 }
@@ -80,14 +92,14 @@ void populatePATH(const string& pathstring) {
 
 // 查找是不是可执行文件，返回绝对路径，否则返回空字符串
 string findCmdInPath(const string& cmd) {
-  for (string directory : PATH) {
+  for (const string& directory : PATH) {
     fs::path fullPath = fs::path(directory) / cmd;
 
-    if (fs::exists(fullPath)) {
+    if (fs::exists(fullPath) && fs::is_regular_file(fullPath)) {
       auto perms = fs::status(fullPath).permissions();
-      if ((perms & (fs::perms::group_exec | fs::perms::owner_exec | fs::perms::others_exec)) == fs::perms::none)
-        continue;
-      return fullPath.string();
+      if ((perms & (fs::perms::group_exec | fs::perms::owner_exec | fs::perms::others_exec)) != fs::perms::none) {
+        return fullPath.string();
+      }
     }
   }
 
@@ -119,7 +131,7 @@ void cacheAllExecutables() {
         executables.push_back(name);
       }
     } catch (const fs::filesystem_error& ex) {
-      cerr << "Error occurred while accessing filesystem: " << ex.what() << endl;
+      // 静默忽略无法访问的目录
       continue;
     }
   }
@@ -143,7 +155,7 @@ char* builtinCompletionGenerator(const char *text, int state) {
   }
 
   while (index < candidates.size()) {
-    string& cmd = candidates[index++];
+    const string& cmd = candidates[index++];
     if (strncmp(cmd.c_str(), text, len) == 0) {
         return strdup(cmd.c_str());
     }
@@ -151,21 +163,46 @@ char* builtinCompletionGenerator(const char *text, int state) {
   return nullptr;
 }
 
+// 外部命令补全生成器
+char* externalCompletionGenerator(const char *text, int state) {
+  static string candidate;
+  static size_t index = 0;
+
+  if (state == 0) {
+    index = 0;
+    candidate.clear();
+    
+    string cmd_line(rl_line_buffer);
+    vector<string> parsed = parseInput(cmd_line);
+    if (parsed.empty()) {
+      return nullptr;
+    }
+    
+    auto it = completes.find(parsed[0]);
+    if (it == completes.end()) {
+      return nullptr;
+    }
+    vector<string> cmd_args = parseInput(it->second);
+    candidate = pipeexecv(cmd_args);
+    // cout << "candidate: " << candidate << endl;
+    return strdup(candidate.c_str());
+  }
+  return nullptr;
+}
+
 char* fileCompletionGenerator(const char *text, int state) {
   static vector<string> matches;
   static size_t index = 0;
-  // 初始状态
+  
   if (state == 0) {
-    // 初始化
     matches.clear();
     index = 0;
-    // 将 char * 转为 string
+    
     string full_path(text);
-
-
     size_t lastSlash = full_path.find_last_of("/\\");
     string path;
     string prefix;
+    
     if (lastSlash != string::npos) {
       path = full_path.substr(0, lastSlash + 1);
       prefix = full_path.substr(lastSlash + 1);
@@ -173,25 +210,24 @@ char* fileCompletionGenerator(const char *text, int state) {
       path = "";
       prefix = full_path;
     }
-    // 遍历当前目录下的所有文件（包括文件夹）
-    for (const auto& entry : fs::directory_iterator("./" +path)) {
-      try {
-        // 获取文件名
-          string name = entry.path().filename().string();
-          // 对比文件名
-          if (name.compare(0, prefix.size(), prefix) == 0) {
-            if (entry.is_directory()) {
-              matches.push_back(path + name + "/");
-            } else {
-              matches.push_back(path + name + " ");
-            }
+    
+    string search_path = path.empty() ? "./" : path;
+    try {
+      for (const auto& entry : fs::directory_iterator(search_path)) {
+        string name = entry.path().filename().string();
+        if (name.compare(0, prefix.size(), prefix) == 0) {
+          if (entry.is_directory()) {
+            matches.push_back(path + name + "/");
+          } else {
+            matches.push_back(path + name + " ");
           }
-        } catch (const fs::filesystem_error& ex) {
-          continue;
         }
       }
+    } catch (const fs::filesystem_error& ex) {
+      // 静默忽略无法访问的目录
+    }
   }
-  // cout << "here 2" << endl << flush;
+  
   if (index < matches.size()) {
     return strdup(matches[index++].c_str());
   }
@@ -199,38 +235,33 @@ char* fileCompletionGenerator(const char *text, int state) {
 }
 
 char** shellCompletion(const char *text, int start, int end) {
-  // 消除「未使用函数参数」的编译器警告
   (void)end;
-  // 强制禁用 readline 自带的所有默认补全
   rl_attempted_completion_over = 1;
 
-  // cout << "here 1" << endl << flush;
-
-  if(start == 0) {
-    // 补全后追加的字符
+  if (start == 0) {
+    // 第一个单词：补全内置命令和可执行文件
     rl_completion_append_character = ' ';
-    char** matches = rl_completion_matches(text, builtinCompletionGenerator);
-    return matches;
+    return rl_completion_matches(text, builtinCompletionGenerator);
+  } else {
+    // 检查是否有注册的外部补全命令
+    string cmd_line(rl_line_buffer);
+    vector<string> parsed = parseInput(cmd_line);
+    if (!parsed.empty() && completes.count(parsed[0])) {
+      rl_completion_append_character = ' ';
+      return rl_completion_matches(text, externalCompletionGenerator);
+    }
+    
+    // 默认：文件补全
+    rl_completion_append_character = '\0';
+    return rl_completion_matches(text, fileCompletionGenerator);
   }
-  // 补全后追加的字符
-  rl_completion_append_character = '\0';
-
-  // string cmd_line(rl_line_buffer);
-  // vector<string> parsed = parseInput(cmd_line);
-  // only_dir = (!parsed.empty() && parsed[0] == "cd");
-
-  return rl_completion_matches(text, fileCompletionGenerator);
 }
 
 bool readInput(string &input) {
   char *line = readline("$ ");
 
-  // cout << "here 3" << endl << flush;
-
   if (line == nullptr)
     return false;
-
-  // cout << "here 4" << endl << flush;
 
   input = line;
   free(line);
@@ -247,7 +278,7 @@ vector<string> parseInput(const string& command) {
   size_t i = 0;
 
   while (i < command.size()) {
-    if (command[i] == '\'' && !isDoubleQuote ) {
+    if (command[i] == '\'' && !isDoubleQuote) {
       isSingleQuote ^= 1;
       isSpace = false;
     } else if (command[i] == '\"' && !isSingleQuote) {
@@ -255,7 +286,7 @@ vector<string> parseInput(const string& command) {
       isSpace = false;
     } else if (command[i] == '\\' && !isSingleQuote && i + 1 < command.size()) {
       current += command[++i];
-    } else if (command[i] == ' ' && !isSingleQuote && !isDoubleQuote){
+    } else if (command[i] == ' ' && !isSingleQuote && !isDoubleQuote) {
       if (isSpace) {
         i++;
         continue;
@@ -282,16 +313,10 @@ void handleInput(const string& input) {
   }
 
   auto command = parsed[0];
-  // 备份标准输出
-  int backup_stdout = 0;
-  int backup_who = -1;
+  int backup_fd = -1;
+  int target_fd = -1;
   bool write_into_file = false;
   string file;
-  // for (int i = 0; i < parsed.size(); ++i) {
-  //   cout << "parsed[" << i << "]: " << parsed[i] << endl;
-  // }
-  // cout << endl;
-  // cout << "handleInput: " << command << endl;
 
   if (parsed.size() > 2) {
     string redirection = parsed[parsed.size() - 2];
@@ -300,27 +325,28 @@ void handleInput(const string& input) {
       file = parsed[parsed.size() - 1];
       parsed.pop_back();
       parsed.pop_back();
-      char flag = 0;
-      size_t size = redirection.size();
-      if (redirection == ">>" || redirection == "1>>" || redirection == "2>>") {
-        flag |= 0b01; // 第 0 位设为 1 → 追加
+      
+      int flags = O_WRONLY | O_CREAT;
+      target_fd = STDOUT_FILENO;
+      
+      if (redirection == ">>" || redirection == "1>>") {
+        flags |= O_APPEND;
+      } else if (redirection == "2>" || redirection == "2>>") {
+        target_fd = STDERR_FILENO;
+        if (redirection == "2>>") flags |= O_APPEND;
+        else flags |= O_TRUNC;
+      } else {
+        flags |= O_TRUNC; // 默认 > 覆盖
       }
-      if (redirection == "2>" || redirection == "2>>") {
-        flag |= 0b10; // 第 1 位设为 1 → 标准错误输出重定向
+      
+      int fd = open(file.c_str(), flags, 0644);
+      if (fd == -1) {
+        cerr << "cannot open " << file << ": Permission denied" << endl;
+        return;
       }
-      /**
-       * open 函数有关参数
-       * O_RDONLY      // 只读（给 < 输入重定向用）
-       * O_WRONLY      // 只写（给 > >> 输出重定向用）
-       * O_RDWR        // 读写
-       * O_CREAT       // 文件不存在就创建
-       * O_TRUNC       // 清空文件（给 > 用）
-       * O_APPEND      // 追加（给 >> 用）
-       */
-      int fd = open(file.c_str(), O_WRONLY | O_CREAT | (flag & 0b01 ? O_APPEND : O_TRUNC), 0644);
-      backup_who = flag & 0b10 ? 2 : 1;
-      backup_stdout = dup(backup_who);
-      dup2(fd, backup_who);
+      
+      backup_fd = dup(target_fd);
+      dup2(fd, target_fd);
       close(fd);
     }
   }
@@ -336,42 +362,51 @@ void handleInput(const string& input) {
   } else if (command == "cd") {
     handlecd(parsed);
   } else if (command == "clear") {
-    clear();
+    // 真正的清屏命令
+    cout << "\033[H\033[2J\033[3J" << flush;
   } else if (command == "complete") {
     handlecomplete(parsed);
-  } else if (findCmdInPath(command) != "") {
-    myexecv(parsed);
   } else {
-    cout << command << ": command not found" << endl;
+    string cmd_path = findCmdInPath(command);
+    if (!cmd_path.empty()) {
+      myexecv(parsed);
+    } else {
+      cout << command << ": command not found" << endl;
+    }
   }
 
-  // 将输出重定向回标准输出
-  if (write_into_file) {
-    dup2(backup_stdout,backup_who);
-    close(backup_stdout);
+  // 恢复文件描述符
+  if (write_into_file && backup_fd != -1) {
+    dup2(backup_fd, target_fd);
+    close(backup_fd);
   }
 }
 
 // 处理echo命令，输出参数
 void handleEcho(const vector<string>& parsed) {
   for (size_t i = 1; i < parsed.size(); i++) {
-    cout << parsed[i] << " ";
+    if (i > 1) cout << " ";
+    cout << parsed[i];
   }
-
-  cout << endl << flush;
+  cout << endl;
 }
 
 // 处理type命令，判断参数是内置命令还是可执行文件
 void handleType(const vector<string>& parsed) {
-  string command = parsed[0];
+  if (parsed.size() < 2) {
+    return;
+  }
+  
   string arg1 = parsed[1];
-
   if (BUILTIN_COMMANDS.count(arg1) > 0) {
     cout << arg1 << " is a shell builtin" << endl;
-  } else if (findCmdInPath(arg1) != "") {
-    cout << arg1 << " is " << findCmdInPath(arg1) << endl;
   } else {
-    cout << arg1 << ": not found" << endl;
+    string path = findCmdInPath(arg1);
+    if (!path.empty()) {
+      cout << arg1 << " is " << path << endl;
+    } else {
+      cout << arg1 << ": not found" << endl;
+    }
   }
 }
 
@@ -382,70 +417,124 @@ void handlepwd(const vector<string>& parsed) {
 
 // 处理cd命令，切换当前路径
 void handlecd(const vector<string>& parsed) {
-  if (parsed.size() < 2) {
-    cout << "cd: missing operand" << endl;
-    return;
-  }
-  // 获取从命令行输入的路径
-  string newPath = parsed[1];
-  if (newPath[0] == '/') {
-    if (!fs::exists(newPath) || !fs::is_directory(newPath)) {
-      cout << "cd: " << parsed[1] << ": No such file or directory" << endl;
+  string newPath;
+  
+  if (parsed.size() < 2 || parsed[1] == "~") {
+    // 没有参数或 ~ 直接切换到用户目录
+    const char* home = getenv("HOME");
+    if (home == nullptr) {
+      cout << "cd: HOME not set" << endl;
       return;
     }
-    // 设置当前工作目录
-    fs::current_path(newPath);
-  } else if (newPath[0] == '~'){ // 用户目录
-    string homestring = getenv("HOME"); // 获取用户目录
-    newPath.replace(0, 1, homestring); // 将输入地址的 ~ 替换为用户目录
-    if (!fs::exists(newPath) || !fs::is_directory(newPath)){
-      cout << "cd: " << newPath << " No such file or directory" << endl;
-      return;
-    }
-    fs::current_path(newPath);
+    newPath = home;
   } else {
-    fs::path fullPath = fs::current_path() / fs::path(newPath);
-    if (!fs::exists(fullPath) || ! fs::is_directory(fullPath)){
-      cout << "cd: " << newPath << ": No such file or directory" << endl;
-      return; 
+    newPath = parsed[1];
+    if (newPath[0] == '~') {
+      // 处理 ~/path 形式
+      const char* home = getenv("HOME");
+      if (home == nullptr) {
+        cout << "cd: HOME not set" << endl;
+        return;
+      }
+      newPath.replace(0, 1, home);
     }
-    fs::current_path(fullPath);
   }
-}
-
-// 执行外部命令，创建子进程，父进程等待子进程结束
-void myexecv(const vector<string>& parsed) {
-  const char **argv = new const char *[parsed.size() + 1];
-  for (int j = 0; j < parsed.size(); ++j)
-    argv[j] = parsed[j].c_str();
-  argv[parsed.size()] = NULL;
-
-  pid_t pid = fork();
-  if (pid == 0) {
-    // execvp 会将当前进程替换成要执行的命令
-    // 所以子进程会被替换成要执行的命令，父进程继续等待子进程结束
-    execvp(argv[0], (char **)argv);
-  } else {
-    int status;
-    wait(&status);
+  
+  try {
+    fs::current_path(newPath);
+  } catch (const fs::filesystem_error& ex) {
+    cout << "cd: " << newPath << ": " << ex.what() << endl;
   }
 }
 
 // 处理complete命令
 void handlecomplete(const vector<string> parsed) {
   if (parsed.size() < 3) {
-    // cout << "complete <-p> <command>" << endl;
     return;
   }
+  
   if (parsed[1] == "-p") {
     auto it = completes.find(parsed[2]);
     if (it == completes.end()) {
       cout << "complete: " << parsed[2] << ": no completion specification" << endl;
     } else {
-      cout << "complete -C \'" << it->second << "\' " << it->first << endl;
+      cout << "complete -C '" << it->second << "' " << it->first << endl;
     }
   } else if (parsed[1] == "-C") {
     if (parsed.size() != 4) return;
     completes[parsed[3]] = parsed[2];
+  }
+}
+
+// 执行外部命令，创建子进程，父进程等待子进程结束
+void myexecv(const vector<string>& parsed) {
+  vector<const char*> argv;
+  for (const auto& arg : parsed) {
+    argv.push_back(arg.c_str());
+  }
+  argv.push_back(nullptr);
+
+  pid_t pid = fork();
+  if (pid == 0) {
+    execvp(argv[0], (char**)argv.data());
+    // 如果execvp失败，子进程退出
+    cerr << parsed[0] << ": command not found" << endl;
+    exit(1);
+  } else if (pid > 0) {
+    int status;
+    waitpid(pid, &status, 0);
+  } else {
+    cerr << "fork failed" << endl;
+  }
+}
+
+// 执行管道命令并捕获标准输出
+string pipeexecv(const vector<string>& parsed) {
+  int pipefd[2];
+  if (pipe(pipefd) == -1) {
+    cerr << "pipe failed" << endl;
+    return "";
+  }
+
+  pid_t pid = fork();
+  if (pid == 0) {
+    // 子进程：执行命令并将输出写入管道
+    close(pipefd[0]); // 关闭读端
+    dup2(pipefd[1], STDOUT_FILENO);
+    dup2(pipefd[1], STDERR_FILENO); // 也捕获标准错误
+    close(pipefd[1]);
+    
+    vector<const char*> argv;
+    for (const auto& arg : parsed) {
+      argv.push_back(arg.c_str());
+    }
+    argv.push_back(nullptr);
+    // cout << "Executing: " << "./" + string(argv[0]) << endl;
+    execvp( ("./" + string(argv[0])).c_str(), (char**)argv.data());
+    exit(1);
+  } else if (pid > 0) {
+    // 父进程：读取管道输出
+    close(pipefd[1]); // 关闭写端
+    
+    string output;
+    char buffer[4096];
+    ssize_t n;
+    
+    while ((n = read(pipefd[0], buffer, sizeof(buffer)-1)) > 0) {
+      buffer[n] = '\0';
+      output += buffer;
+    }
+    
+    close(pipefd[0]);
+    
+    int status;
+    waitpid(pid, &status, 0);
+    
+    return output;
+  } else {
+    cerr << "fork failed" << endl;
+    close(pipefd[0]);
+    close(pipefd[1]);
+    return "";
   }
 }
