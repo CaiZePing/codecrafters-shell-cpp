@@ -448,7 +448,7 @@ void handlecd(const vector<string>& parsed) {
     // 没有参数或 ~ 直接切换到用户目录
     const char* home = getenv("HOME");
     if (home == nullptr) {
-      cout << "cd: HOME not set" << endl;
+      // cout << "cd: HOME not set" << endl;
       return;
     }
     newPath = home;
@@ -458,7 +458,7 @@ void handlecd(const vector<string>& parsed) {
       // 处理 ~/path 形式
       const char* home = getenv("HOME");
       if (home == nullptr) {
-        cout << "cd: HOME not set" << endl;
+        // cout << "cd: HOME not set" << endl;
         return;
       }
       newPath.replace(0, 1, home);
@@ -468,7 +468,8 @@ void handlecd(const vector<string>& parsed) {
   try {
     fs::current_path(newPath);
   } catch (const fs::filesystem_error& ex) {
-    cout << "cd: " << newPath << ": " << ex.what() << endl;
+    // cout << "cd: " << newPath << ": " << ex.what() << endl;
+    cout << "cd: " << newPath << ": No such file or directory" << endl;
   }
 }
 
