@@ -23,10 +23,23 @@ constexpr char PATH_LIST_SEPARATOR = ':';
 using namespace std;
 namespace fs = filesystem;
 
+/**
+ * 全局变量
+ */
+
 const unordered_set<string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd", "complete"};
 vector<string> PATH{};              // 存储PATH环境变量中的所有路径
+
+// 自定义的两个环境变量
+string COMP_LINE{};
+string COMP_POINT{};
+
 vector<string> executables{};       // 存储所有可执行文件
 unordered_map<string, string> completes{}; // 存储注册命令
+
+/**
+ * function declaration
+ */
 
 void clear();                                 // 清屏
 void populatePATH(const string& pathstring);  // 将PATH环境变量分解成一个个路径
@@ -49,6 +62,8 @@ void handlecomplete(const vector<string> parsed);               // 处理 comple
 
 void myexecv(const vector<string>& parsed);                     // 执行命令
 string pipeexecv(const vector<string>& parsed);                 // 执行管道命令并捕获输出
+
+// function declaration end
 
 int main() {
   string input;
@@ -75,6 +90,10 @@ int main() {
     handleInput(input);
   }
 }
+
+/**
+ * function definition
+ */
 
 void clear() {
   cout << unitbuf;
@@ -279,10 +298,14 @@ char** shellCompletion(const char *text, int start, int end) {
   rl_attempted_completion_over = 1;
 
   if (start == 0) {
+    setenv("COMP_LINE", rl_line_buffer, 1);
+    setenv("COMP_POINT", to_string(rl_point).c_str(), 1);
     // 第一个单词：补全内置命令和可执行文件
     rl_completion_append_character = ' ';
     return rl_completion_matches(text, builtinCompletionGenerator);
   } else {
+    setenv("COMP_LINE", rl_line_buffer, 1);
+    setenv("COMP_POINT", to_string(rl_point).c_str(), 1);
     // 检查是否有注册的外部补全命令
     string cmd_line(rl_line_buffer);
     vector<string> parsed = parseInput(cmd_line);
@@ -589,3 +612,5 @@ string pipeexecv(const vector<string>& parsed) {
     return "";
   }
 }
+
+// function definition end
