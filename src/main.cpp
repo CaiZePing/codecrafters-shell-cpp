@@ -27,7 +27,7 @@ namespace fs = filesystem;
  * 全局变量
  */
 
-const unordered_set<string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd", "complete"};
+const unordered_set<string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd", "complete", "jobs"};
 vector<string> PATH{};              // 存储PATH环境变量中的所有路径
 
 // 自定义的两个环境变量
@@ -59,6 +59,7 @@ void handleType(const vector<string>& parsed);                  // 处理 type
 void handlepwd(const vector<string>& parsed);                   // 处理 pwd
 void handlecd(const vector<string>& parsed);                    // 处理 cd
 void handlecomplete(const vector<string> parsed);               // 处理 complete
+void handlejobs(const vector<string> parsed);                   // 处理 jobs
 
 void myexecv(const vector<string>& parsed);                     // 执行命令
 string pipeexecv(const vector<string>& parsed);                 // 执行管道命令并捕获输出
@@ -439,6 +440,8 @@ void handleInput(const string& input) {
     cout << "\033[H\033[2J\033[3J" << flush;
   } else if (command == "complete") {
     handlecomplete(parsed);
+  } else if (command == "jobs") {
+    handlejobs(parsed);
   } else {
     string cmd_path = findCmdInPath(command);
     if (!cmd_path.empty()) {
@@ -540,6 +543,10 @@ void handlecomplete(const vector<string> parsed) {
   } else if (parsed[1] == "-r") {
     completes.erase(parsed[2]);
   }
+}
+
+void handlejobs(const vector<string> parsed) {
+  return;
 }
 
 // 执行外部命令，创建子进程，父进程等待子进程结束
