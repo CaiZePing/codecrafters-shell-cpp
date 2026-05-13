@@ -193,7 +193,22 @@ char* externalCompletionGenerator(const char *text, int state) {
     if (it == completes.end()) {
       return nullptr;
     }
+    string before_cursor = cmd_line.substr(0, rl_point);
+    vector<string> parsed_before_cursor = parseInput(before_cursor);
+    
+    string cmd_name = parsed[0];
+    string current_word = text;
+    string previous_word = "";
+    
+    int word_index = parsed_before_cursor.size() - 1;
+    if (word_index > 0) {
+      previous_word = parsed_before_cursor[word_index - 1];
+    }
+    
     vector<string> cmd_args = parseInput(it->second);
+    cmd_args.push_back(cmd_name);
+    cmd_args.push_back(current_word);
+    cmd_args.push_back(previous_word);
     string output = pipeexecv(cmd_args);
     
     stringstream ss(output);
