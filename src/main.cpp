@@ -157,15 +157,27 @@ char* fileCompletionGenerator(const char *text, int state) {
     matches.clear();
     index = 0;
     // 将 char * 转为 string
-    string prefix(text);
-      // 遍历当前目录下的所有文件（包括文件夹）
-      for (const auto& entry : fs::directory_iterator(".")) {
-        try {
-          // 获取文件名
+    string full_path(text);
+
+
+    size_t lastSlash = full_path.find_last_of("/\\");
+    string path;
+    string prefix;
+    if (lastSlash != string::npos) {
+      path = full_path.substr(0, lastSlash + 1);
+      prefix = full_path.substr(lastSlash + 1);
+    } else {
+      path = "";
+      prefix = full_path;
+    }
+    // 遍历当前目录下的所有文件（包括文件夹）
+    for (const auto& entry : fs::directory_iterator("./" +path)) {
+      try {
+        // 获取文件名
           string name = entry.path().filename().string();
           // 对比文件名
           if (name.compare(0, prefix.size(), prefix) == 0) {
-            matches.push_back(name);
+            matches.push_back(path + name);
           }
         } catch (const fs::filesystem_error& ex) {
           continue;
