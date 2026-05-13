@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <unordered_set>
 #include <vector>
+#include <algorithm>
 
 #ifdef _WIN32
 constexpr char PATH_LIST_SEPARATOR = ';';
@@ -23,6 +24,7 @@ namespace fs = filesystem;
 const unordered_set<string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd"};
 vector<string> PATH{};          // 存储PATH环境变量中的所有路径
 vector<string> executables{};   // 存储所有可执行文件
+bool only_dir = false;
 
 void clear();                                 // 清屏
 void populatePATH(const string& pathstring);  // 将PATH环境变量分解成一个个路径
@@ -30,7 +32,9 @@ string findCmdInPath(const string& cmd);      // 在PATH中查找命令
 void cacheAllExecutables();                   // 缓存所有可执行文件
 
 char* builtinCompletionGenerator(const char *text, int state);  // 命令补全生成器
+char* fileCompletionGenerator(const char *text, int state);     // 文件补全生成器
 char** shellCompletion(const char *text, int start, int end);   // shell补全函数
+
 bool readInput(string &input);                                  // 读取用户输入
 vector<string> parseInput(const string& command);               // 解析输入命令
 void handleInput(const string& parsed);                         // 处理输入
@@ -78,8 +82,7 @@ string findCmdInPath(const string& cmd) {
 
     if (fs::exists(fullPath)) {
       auto perms = fs::status(fullPath).permissions();
-      if ((perms & (fs::perms::group_exec | fs::perms::owner_exec |
-                    fs::perms::others_exec)) == fs::perms::none)
+      if ((perms & (fs::perms::group_exec | fs::perms::owner_exec | fs::perms::others_exec)) == fs::perms::none)
         continue;
       return fullPath.string();
     }
@@ -145,21 +148,89 @@ char* builtinCompletionGenerator(const char *text, int state) {
   return nullptr;
 }
 
+char* fileCompletionGenerator(const char *text, int state) {
+  static vector<string> matches;
+  static size_t matchIndex;
+  extern bool only_dir; // 是否只补全目录（cd 命令专用）
+
+  // state=0：初始化，生成匹配列表
+  if (state == 0) {
+    matches.clear();
+    matchIndex = 0;
+    string prefix(text);
+    fs::path base_path;
+    string name_prefix;
+
+    // ------------- 1. 解析路径：分离 目录 + 前缀 -------------
+    if (prefix.empty() || fs::is_directory(prefix)) {
+      // 空输入 / 直接输入目录
+      base_path = prefix.empty() ? "." : prefix;
+      name_prefix = "";
+    } else {
+      // 带前缀的路径（如 test/abc → 目录test/，前缀abc）
+      base_path = fs::path(prefix).parent_path();
+      name_prefix = fs::path(prefix).filename().string();
+    }
+
+    // ------------- 2. 遍历目录，筛选匹配项 -------------
+    try {
+      if (!fs::exists(base_path) || !fs::is_directory(base_path)) {
+        return nullptr;
+      }
+
+      for (const auto& entry : fs::directory_iterator(base_path)) {
+        string name = entry.path().filename().string();
+        // 前缀匹配
+        if (name.compare(0, name_prefix.size(), name_prefix) != 0) continue;
+        // 筛选：cd 只保留目录
+        if (only_dir && !entry.is_directory()) continue;
+
+        // 拼接完整路径
+        fs::path full_path = base_path / name;
+        string match_str = full_path.string();
+        // 目录自动加 /（标准 shell 行为）
+        if (entry.is_directory()) match_str += "/";
+
+        matches.push_back(match_str);
+      }
+      // 排序，提升体验
+      sort(matches.begin(), matches.end());
+    } catch (...) {
+      return nullptr;
+    }
+  }
+
+  // ------------- 3. 返回匹配项 -------------
+  if (matchIndex < matches.size()) {
+    return strdup(matches[matchIndex++].c_str());
+  }
+
+  return nullptr;
+}
+
 char** shellCompletion(const char *text, int start, int end) {
+  // 消除「未使用函数参数」的编译器警告
   (void)end;
+  // 强制禁用 readline 自带的所有默认补全
   rl_attempted_completion_over = 1;
 
-  if(start != 0)
-    return nullptr;
+  if(start == 0) {
+    // 补全后追加的字符
+    rl_completion_append_character = ' ';
+    char** matches = rl_completion_matches(text, builtinCompletionGenerator);
+    if (!matches)
+      cout << "\a" << flush;
+    return matches;
+  }
+  // 补全后追加的字符
+  rl_completion_append_character = '\0';
 
-  rl_completion_append_character = ' ';
-  
-  char** matches = rl_completion_matches(text, builtinCompletionGenerator);
+  string cmd_line(rl_line_buffer);
+  vector<string> parsed = parseInput(cmd_line);
+  bool is_cd = (!parsed.empty() && parsed[0] == "cd");
+  only_dir = is_cd;
 
-  if (!matches)
-    cout << "\a" << flush;
-  
-  return matches;
+  return rl_completion_matches(text, fileCompletionGenerator);
 }
 
 bool readInput(string &input) {
@@ -178,30 +249,28 @@ vector<string> parseInput(const string& command) {
   string current;
   bool isSingleQuote = false;
   bool isDoubleQuote = false;
-  bool isBackslash = false;
   bool isSpace = false;
+  size_t i = 0;
 
-  for (char c : command) {
-    if (isBackslash) {
-      current += c;
-      isBackslash = false;
-    } else if (c == '\'' && !isDoubleQuote ) {
-     isSingleQuote ^= 1;
-     isSpace = false;
-    } else if (c == '\"' && !isSingleQuote) {
+  while (i < command.size()) {
+    if (command[i] == '\'' && !isDoubleQuote ) {
+      isSingleQuote ^= 1;
+      isSpace = false;
+    } else if (command[i] == '\"' && !isSingleQuote) {
       isDoubleQuote ^= 1;
       isSpace = false;
-    } else if (c == '\\' && !isSingleQuote) {
-      isBackslash = true;
-    } else if (c == ' ' && !isSingleQuote && !isDoubleQuote){
+    } else if (command[i] == '\\' && !isSingleQuote && i + 1 < command.size()) {
+      current += command[++i];
+    } else if (command[i] == ' ' && !isSingleQuote && !isDoubleQuote){
       if (isSpace) continue;
       parsed.push_back(current);
       current.clear();
       isSpace = true;
     } else {
-      current += c;
+      current += command[i];
       isSpace = false;
     }
+    i++;
   }
   if (!current.empty())
     parsed.push_back(current);
