@@ -42,6 +42,7 @@ void handleEcho(const vector<string>& parsed);                  // 处理 echo
 void handleType(const vector<string>& parsed);                  // 处理 type
 void handlepwd(const vector<string>& parsed);                   // 处理 pwd
 void handlecd(const vector<string>& parsed);                    // 处理 cd
+void handlecomplete(const vector<string> parsed);               // 处理 complete
 
 void myexecv(const vector<string>& parsed);                     // 执行命令
 
@@ -334,6 +335,8 @@ void handleInput(const string& input) {
     handlecd(parsed);
   } else if (command == "clear") {
     clear();
+  } else if (command == "complete") {
+    handlecomplete(parsed);
   } else if (findCmdInPath(command) != "") {
     myexecv(parsed);
   } else {
@@ -423,5 +426,16 @@ void myexecv(const vector<string>& parsed) {
   } else {
     int status;
     wait(&status);
+  }
+}
+
+// 处理complete命令
+void handlecomplete(const vector<string> parsed) {
+  if (parsed.size() < 3) {
+    // cout << "complete <-p> <command>" << endl;
+    return;
+  }
+  if (parsed[1] == "-p") {
+    cout << "complete: " << parsed[2] << ": no completion specification" << endl;
   }
 }
