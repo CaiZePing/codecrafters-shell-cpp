@@ -150,61 +150,24 @@ char* builtinCompletionGenerator(const char *text, int state) {
 
 char* fileCompletionGenerator(const char *text, int state) {
   static vector<string> matches;
-  static size_t matchIndex;
-  extern bool only_dir; // 是否只补全目录（cd 命令专用）
+  static size_t index;
 
-  // state=0：初始化，生成匹配列表
   if (state == 0) {
     matches.clear();
-    matchIndex = 0;
+    index = 0;
+
     string prefix(text);
-    fs::path base_path;
-    string name_prefix;
 
-    // ------------- 1. 解析路径：分离 目录 + 前缀 -------------
-    if (prefix.empty() || fs::is_directory(prefix)) {
-      // 空输入 / 直接输入目录
-      base_path = prefix.empty() ? "." : prefix;
-      name_prefix = "";
-    } else {
-      // 带前缀的路径（如 test/abc → 目录test/，前缀abc）
-      base_path = fs::path(prefix).parent_path();
-      name_prefix = fs::path(prefix).filename().string();
-    }
-
-    // ------------- 2. 遍历目录，筛选匹配项 -------------
-    try {
-      if (!fs::exists(base_path) || !fs::is_directory(base_path)) {
-        return nullptr;
+    for (const auto& entry : fs::directory_iterator(".")) {
+      string name = entry.path().filename().string();
+      if (name.compare(0, prefix.size(), prefix) == 0) {
+        matches.push_back(name);
       }
-
-      for (const auto& entry : fs::directory_iterator(base_path)) {
-        string name = entry.path().filename().string();
-        // 前缀匹配
-        if (name.compare(0, name_prefix.size(), name_prefix) != 0) continue;
-        // 筛选：cd 只保留目录
-        if (only_dir && !entry.is_directory()) continue;
-
-        // 拼接完整路径
-        fs::path full_path = base_path / name;
-        string match_str = full_path.string();
-        // 目录自动加 /（标准 shell 行为）
-        if (entry.is_directory()) match_str += "/";
-
-        matches.push_back(match_str);
-      }
-      // 排序，提升体验
-      sort(matches.begin(), matches.end());
-    } catch (...) {
-      return nullptr;
     }
   }
-
-  // ------------- 3. 返回匹配项 -------------
-  if (matchIndex < matches.size()) {
-    return strdup(matches[matchIndex++].c_str());
+  if (index < matches.size()) {
+    return strdup(matches[index++].c_str());
   }
-
   return nullptr;
 }
 
@@ -225,10 +188,9 @@ char** shellCompletion(const char *text, int start, int end) {
   // 补全后追加的字符
   rl_completion_append_character = ' ';
 
-  string cmd_line(rl_line_buffer);
-  vector<string> parsed = parseInput(cmd_line);
-  bool is_cd = (!parsed.empty() && parsed[0] == "cd");
-  only_dir = is_cd;
+  // string cmd_line(rl_line_buffer);
+  // vector<string> parsed = parseInput(cmd_line);
+  // only_dir = (!parsed.empty() && parsed[0] == "cd");
 
   return rl_completion_matches(text, fileCompletionGenerator);
 }
