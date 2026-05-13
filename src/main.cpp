@@ -150,21 +150,29 @@ char* builtinCompletionGenerator(const char *text, int state) {
 
 char* fileCompletionGenerator(const char *text, int state) {
   static vector<string> matches;
-  static size_t index;
-
+  static size_t index = 0;
+  // 初始状态
   if (state == 0) {
+    // 初始化
     matches.clear();
     index = 0;
-
+    // 将 char * 转为 string
     string prefix(text);
-
-    for (const auto& entry : fs::directory_iterator(".")) {
-      string name = entry.path().filename().string();
-      if (name.compare(0, prefix.size(), prefix) == 0) {
-        matches.push_back(name);
+      // 遍历当前目录下的所有文件（包括文件夹）
+      for (const auto& entry : fs::directory_iterator(".")) {
+        try {
+          // 获取文件名
+          string name = entry.path().filename().string();
+          // 对比文件名
+          if (name.compare(0, prefix.size(), prefix) == 0) {
+            matches.push_back(name);
+          }
+        } catch (const fs::filesystem_error& ex) {
+          continue;
+        }
       }
-    }
   }
+  // cout << "here 2" << endl << flush;
   if (index < matches.size()) {
     return strdup(matches[index++].c_str());
   }
@@ -177,12 +185,12 @@ char** shellCompletion(const char *text, int start, int end) {
   // 强制禁用 readline 自带的所有默认补全
   rl_attempted_completion_over = 1;
 
+  // cout << "here 1" << endl << flush;
+
   if(start == 0) {
     // 补全后追加的字符
     rl_completion_append_character = ' ';
     char** matches = rl_completion_matches(text, builtinCompletionGenerator);
-    if (!matches)
-      cout << "\a" << flush;
     return matches;
   }
   // 补全后追加的字符
@@ -197,8 +205,13 @@ char** shellCompletion(const char *text, int start, int end) {
 
 bool readInput(string &input) {
   char *line = readline("$ ");
+
+  // cout << "here 3" << endl << flush;
+
   if (line == nullptr)
     return false;
+
+  // cout << "here 4" << endl << flush;
 
   input = line;
   free(line);
@@ -224,7 +237,10 @@ vector<string> parseInput(const string& command) {
     } else if (command[i] == '\\' && !isSingleQuote && i + 1 < command.size()) {
       current += command[++i];
     } else if (command[i] == ' ' && !isSingleQuote && !isDoubleQuote){
-      if (isSpace) continue;
+      if (isSpace) {
+        i++;
+        continue;
+      }
       parsed.push_back(current);
       current.clear();
       isSpace = true;
@@ -245,6 +261,7 @@ void handleInput(const string& input) {
   if (parsed.empty()) {
     return;
   }
+
   auto command = parsed[0];
   // 备份标准输出
   int backup_stdout = 0;
@@ -320,7 +337,7 @@ void handleEcho(const vector<string>& parsed) {
     cout << parsed[i] << " ";
   }
 
-  cout << endl;
+  cout << endl << flush;
 }
 
 // 处理type命令，判断参数是内置命令还是可执行文件
