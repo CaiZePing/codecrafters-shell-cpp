@@ -135,6 +135,7 @@ string findCmdInPath(const string& cmd) {
   return "";
 }
 
+// 缓存当前 PATH 中的可执行文件
 void cacheAllExecutables() {
   if (!executables.empty()) return;
 
@@ -142,13 +143,14 @@ void cacheAllExecutables() {
 
   for (const auto& dir : PATH) {
     try {
+      // 是否存在 或 是不是文件夹
       if (!fs::exists(dir) || !fs::is_directory(dir))
         continue;
-  
+      // 遍历文件夹中的所有文件
       for (const auto& entry : fs::directory_iterator(dir)) {
         if (!entry.is_regular_file())
           continue;
-  
+        // 查看文件的 权限
         auto perms = entry.status().permissions();
         if ((perms & (fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec)) == fs::perms::none)
           continue;
@@ -166,6 +168,7 @@ void cacheAllExecutables() {
   }
 }
 
+// 内部指令补全生成器
 char* builtinCompletionGenerator(const char *text, int state) {
   static vector<string> candidates;
   static size_t index = 0;
@@ -176,10 +179,12 @@ char* builtinCompletionGenerator(const char *text, int state) {
     len = strlen(text);
 
     // 先把内置命令加进去
+    // assign 函数会重置 candidates
     candidates.assign(BUILTIN_COMMANDS.begin(), BUILTIN_COMMANDS.end());
 
     // 再把 PATH 里所有可执行文件加进去
-    cacheAllExecutables();
+    // 实际上可以不使用， 因为在 main 函数中 已经初始化过，这个函数 全局只需要使用一次即可，再次执行会直接返回
+    // cacheAllExecutables();
     candidates.insert(candidates.end(), executables.begin(), executables.end());
   }
 
@@ -192,26 +197,30 @@ char* builtinCompletionGenerator(const char *text, int state) {
   return nullptr;
 }
 
+// 外部命令补全生成器
 char* externalCompletionGenerator(const char *text, int state) {
   static vector<string> candidates;
   static size_t index = 0;
   static int len;
-
+  // 这个里面的 state 在每次重新按 <tab> 键的时候都会重新变为 0
+  // 只是在一次 <tab> 中，每次查找下一个的时候，这个 state 才会增加
+  // 也就是说，在一次 补全 的情况下 candidates 里面的值应该是固定的
   if (state == 0) {
     index = 0;
     candidates.clear();
     len = strlen(text);
-    
+    // 获取当前的输入行的缓存
     string cmd_line(rl_line_buffer);
     vector<string> parsed = parseInput(cmd_line);
     if (parsed.empty()) {
       return nullptr;
     }
-    
+    // 查看是不是 使用 complete 注册过的
     auto it = completes.find(parsed[0]);
     if (it == completes.end()) {
       return nullptr;
     }
+    // 获取光标前的输入
     string before_cursor = cmd_line.substr(0, rl_point);
     vector<string> parsed_before_cursor = parseInput(before_cursor);
     
@@ -249,6 +258,7 @@ char* externalCompletionGenerator(const char *text, int state) {
   return nullptr;
 }
 
+// 文件补全生成器
 char* fileCompletionGenerator(const char *text, int state) {
   static vector<string> matches;
   static size_t index = 0;
@@ -527,6 +537,8 @@ void handlecomplete(const vector<string> parsed) {
   } else if (parsed[1] == "-C") {
     if (parsed.size() != 4) return;
     completes[parsed[3]] = parsed[2];
+  } else if (parsed[1] == "-r") {
+    completes.erase(parsed[2]);
   }
 }
 
