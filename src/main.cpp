@@ -177,7 +177,11 @@ char* fileCompletionGenerator(const char *text, int state) {
           string name = entry.path().filename().string();
           // 对比文件名
           if (name.compare(0, prefix.size(), prefix) == 0) {
-            matches.push_back(path + name);
+            if (entry.is_directory()) {
+              matches.push_back(path + name + "/");
+            } else {
+              matches.push_back(path + name + " ");
+            }
           }
         } catch (const fs::filesystem_error& ex) {
           continue;
@@ -206,7 +210,7 @@ char** shellCompletion(const char *text, int start, int end) {
     return matches;
   }
   // 补全后追加的字符
-  rl_completion_append_character = ' ';
+  rl_completion_append_character = '\0';
 
   // string cmd_line(rl_line_buffer);
   // vector<string> parsed = parseInput(cmd_line);
