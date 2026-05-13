@@ -439,9 +439,11 @@ void handlecomplete(const vector<string> parsed) {
   }
   if (parsed[1] == "-p") {
     auto it = completes.find(parsed[2]);
-    if (it == completes.end())
+    if (it == completes.end()) {
       cout << "complete: " << parsed[2] << ": no completion specification" << endl;
-    cout << "complete -C \'" << it->second << "\' " << it->first << endl;
+    } else {
+      cout << "complete -C \'" << it->second << "\' " << it->first << endl;
+    }
   } else if (parsed[1] == "-C") {
     if (parsed.size() != 4) return;
     completes[parsed[3]] = parsed[2];
