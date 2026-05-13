@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <unordered_set>
+#include <unordered_map>
 #include <vector>
 #include <algorithm>
 
@@ -22,8 +23,9 @@ using namespace std;
 namespace fs = filesystem;
 
 const unordered_set<string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd" ,"complete"};
-vector<string> PATH{};          // 存储PATH环境变量中的所有路径
-vector<string> executables{};   // 存储所有可执行文件
+vector<string> PATH{};              // 存储PATH环境变量中的所有路径
+vector<string> executables{};       // 存储所有可执行文件
+unordered_map<string, string> completes{}; // 存储注册命令
 bool only_dir = false;
 
 void clear();                                 // 清屏
@@ -436,6 +438,12 @@ void handlecomplete(const vector<string> parsed) {
     return;
   }
   if (parsed[1] == "-p") {
-    cout << "complete: " << parsed[2] << ": no completion specification" << endl;
+    auto it = completes.find(parsed[2]);
+    if (it == completes.end())
+      cout << "complete: " << parsed[2] << ": no completion specification" << endl;
+    cout << "complete -C \'" << it->second << "\' " << it->first << endl;
+  } else if (parsed[1] == "-C") {
+    if (parsed.size() != 4) return;
+    completes[parsed[3]] = parsed[2];
   }
 }
