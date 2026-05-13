@@ -223,7 +223,7 @@ char** shellCompletion(const char *text, int start, int end) {
     return matches;
   }
   // 补全后追加的字符
-  rl_completion_append_character = '\0';
+  rl_completion_append_character = ' ';
 
   string cmd_line(rl_line_buffer);
   vector<string> parsed = parseInput(cmd_line);
