@@ -21,7 +21,7 @@ constexpr char PATH_LIST_SEPARATOR = ':';
 using namespace std;
 namespace fs = filesystem;
 
-const unordered_set<string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd"};
+const unordered_set<string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd" ,"complete"};
 vector<string> PATH{};          // 存储PATH环境变量中的所有路径
 vector<string> executables{};   // 存储所有可执行文件
 bool only_dir = false;
