@@ -92,6 +92,16 @@ void populatePATH(const string& pathstring) {
 
 // 查找是不是可执行文件，返回绝对路径，否则返回空字符串
 string findCmdInPath(const string& cmd) {
+  fs::path cwd = fs::current_path();
+  fs::path cwd_fullPath = cwd / cmd;
+  
+  if (fs::exists(cwd_fullPath) && fs::is_regular_file(cwd_fullPath)) {
+    auto perms = fs::status(cwd_fullPath).permissions();
+    if ((perms & (fs::perms::group_exec | fs::perms::owner_exec | fs::perms::others_exec)) != fs::perms::none) {
+      return cwd_fullPath.string();
+    }
+  }
+
   for (const string& directory : PATH) {
     fs::path fullPath = fs::path(directory) / cmd;
 
@@ -163,7 +173,6 @@ char* builtinCompletionGenerator(const char *text, int state) {
   return nullptr;
 }
 
-// 外部命令补全生成器
 char* externalCompletionGenerator(const char *text, int state) {
   static vector<string> candidates;
   static size_t index = 0;
@@ -187,21 +196,15 @@ char* externalCompletionGenerator(const char *text, int state) {
     vector<string> cmd_args = parseInput(it->second);
     string output = pipeexecv(cmd_args);
     
-    // 将输出按行分割成候选列表
     stringstream ss(output);
     string line;
     while (getline(ss, line)) {
-      // 去掉行尾的换行符
-      if (!line.empty() && line.back() == '\r') {
-        line.pop_back();
-      }
       if (!line.empty()) {
         candidates.push_back(line);
       }
     }
   }
-  
-  // 遍历候选列表，返回匹配 text 的项
+
   while (index < candidates.size()) {
     const string& candidate = candidates[index++];
     if (strncmp(candidate.c_str(), text, len) == 0) {
@@ -498,7 +501,12 @@ void myexecv(const vector<string>& parsed) {
 
   pid_t pid = fork();
   if (pid == 0) {
-    execvp(argv[0], (char**)argv.data());
+    string cmd_path = findCmdInPath(argv[0]);
+    if (!cmd_path.empty()) {
+      execvp(cmd_path.c_str(), (char**)argv.data());
+    } else {
+      execvp(argv[0], (char**)argv.data());
+    }
     // 如果execvp失败，子进程退出
     cerr << parsed[0] << ": command not found" << endl;
     exit(1);
@@ -531,8 +539,13 @@ string pipeexecv(const vector<string>& parsed) {
       argv.push_back(arg.c_str());
     }
     argv.push_back(nullptr);
-    // cout << "Executing: " << "./" + string(argv[0]) << endl;
-    execvp( ("./" + string(argv[0])).c_str(), (char**)argv.data());
+    
+    string cmd_path = findCmdInPath(argv[0]);
+    if (!cmd_path.empty()) {
+      execvp(cmd_path.c_str(), (char**)argv.data());
+    } else {
+      execvp(argv[0], (char**)argv.data());
+    }
     exit(1);
   } else if (pid > 0) {
     // 父进程：读取管道输出
