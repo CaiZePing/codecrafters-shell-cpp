@@ -165,12 +165,14 @@ char* builtinCompletionGenerator(const char *text, int state) {
 
 // 外部命令补全生成器
 char* externalCompletionGenerator(const char *text, int state) {
-  static string candidate;
+  static vector<string> candidates;
   static size_t index = 0;
+  static int len;
 
   if (state == 0) {
     index = 0;
-    candidate.clear();
+    candidates.clear();
+    len = strlen(text);
     
     string cmd_line(rl_line_buffer);
     vector<string> parsed = parseInput(cmd_line);
@@ -183,10 +185,30 @@ char* externalCompletionGenerator(const char *text, int state) {
       return nullptr;
     }
     vector<string> cmd_args = parseInput(it->second);
-    candidate = pipeexecv(cmd_args);
-    // cout << "candidate: " << candidate << endl;
-    return strdup(candidate.c_str());
+    string output = pipeexecv(cmd_args);
+    
+    // 将输出按行分割成候选列表
+    stringstream ss(output);
+    string line;
+    while (getline(ss, line)) {
+      // 去掉行尾的换行符
+      if (!line.empty() && line.back() == '\r') {
+        line.pop_back();
+      }
+      if (!line.empty()) {
+        candidates.push_back(line);
+      }
+    }
   }
+  
+  // 遍历候选列表，返回匹配 text 的项
+  while (index < candidates.size()) {
+    const string& candidate = candidates[index++];
+    if (strncmp(candidate.c_str(), text, len) == 0) {
+      return strdup(candidate.c_str());
+    }
+  }
+  
   return nullptr;
 }
 
