@@ -1,0 +1,198 @@
+#include "command.hpp"
+
+#include <signal.h>
+
+namespace cmd {
+// 忽略信号
+static void ignore_signal(int sig) {
+    struct sigaction sa = {};
+    sa.sa_handler = SIG_IGN;
+    sigaction(sig, &sa, nullptr);
+}
+
+// 恢复信号默认行为
+static void restore_signal(int sig) {
+    struct sigaction sa = {};
+    sa.sa_handler = SIG_DFL;
+    sigaction(sig, &sa, nullptr);
+}
+
+bool Jobs::addJob(Job job) {
+    if (jobs.size() >= MAX_JOBS) {
+        Jobs::instance().removeDoneJobs();
+        if (jobs.size() >= MAX_JOBS) {
+            return false;
+        }
+    }
+    jobs.push_back(std::move(job));
+    return true;
+}
+Job& Jobs::getJobById(size_t job_id) {
+    for (auto &job : jobs) {
+        if (job.getJobId() == job_id) {
+            return job;
+        }
+    }
+    throw std::invalid_argument("Job not found");
+}
+Job& Jobs::getJobByPgid(pid_t pgid) {
+    for (auto &job : jobs) {
+        if (job.getPgid() == pgid) {
+            return job;
+        }
+    }
+    throw std::invalid_argument("Job not found");
+}
+void Jobs::showJobs() {
+    for (auto &job : jobs) {
+        std::cout << "[" << job.getJobId() << "] " << job.getCommand() << std::endl;
+    }
+}
+
+void Jobs::removeDoneJobs() {
+    jobs.erase(std::remove_if(jobs.begin(), jobs.end(), [](const Job& job) {
+        return job.getState() == State::DONE;
+    }), jobs.end());
+}
+
+void jobs(const std::vector<std::string>& parsed) {
+    // Implementation for displaying jobs
+    Jobs& jobs = Jobs::instance();
+    jobs.showJobs();
+}
+
+// 执行外部命令，创建子进程，父进程等待子进程结束
+void myexecv(const std::vector<std::string>& parsed, std::string command) {
+  std::vector<const char*> argv;
+  for (const auto& arg : parsed) {
+    argv.push_back(arg.c_str());
+  }
+  argv.push_back(nullptr);
+
+  pid_t pid = fork();
+  if (pid == 0) {
+    // 子进程创建新组
+    setpgid(0, 0);
+    restore_signal(SIGINT);
+    restore_signal(SIGTSTP);
+    std::string cmd_path = findCmdInPath(argv[0]);
+    if (!cmd_path.empty()) {
+      execvp(cmd_path.c_str(), (char**)argv.data());
+    } else {
+      execvp(argv[0], (char**)argv.data());
+    }
+    // 如果execvp失败，子进程退出
+    std::cerr << parsed[0] << ": command not found" << std::endl;
+    exit(1);
+  } else if (pid > 0) {
+    setpgid(pid, pid);  // 父进程：确保子进程在新进程组中
+    ignore_signal(SIGINT);
+    ignore_signal(SIGTSTP);
+    tcsetpgrp(STDIN_FILENO, pid);  // 将终端控制权交给子进程
+    int status;
+    waitpid(pid, &status, 0);
+    tcsetpgrp(STDIN_FILENO, getpgrp()); // 恢复终端控制权
+    restore_signal(SIGINT);
+    restore_signal(SIGTSTP);
+    // Ctrl+Z 暂停
+    if (WIFSTOPPED(status)) {
+        // 此时才创建 Job 并加入列表
+        Job new_job(pid, command);
+        new_job.addProcess(pid);
+        new_job.setState(State::STOPPED);
+        Jobs::instance().addJob(new_job);
+        std::cout << "[" << new_job.getJobId() << "] " << new_job.getCommand() << std::endl;
+    }
+  } else {
+    std::cerr << "fork failed" << std::endl;
+  }
+}
+
+// 执行管道命令并捕获标准输出
+std::string pipeexecv(const std::vector<std::string>& parsed, std::string command) {
+  int pipefd[2];
+  if (pipe(pipefd) == -1) {
+    std::cerr << "pipe failed" << std::endl;
+    return "";
+  }
+
+  pid_t pid = fork();
+  if (pid == 0) {
+    // 子进程创建新组
+    setpgid(0, 0);
+    // 子进程：执行命令并将输出写入管道
+    close(pipefd[0]); // 关闭读端
+    dup2(pipefd[1], STDOUT_FILENO);
+    dup2(pipefd[1], STDERR_FILENO); // 也捕获标准错误
+    close(pipefd[1]);
+    
+    std::vector<const char*> argv;
+    for (const auto& arg : parsed) {
+      argv.push_back(arg.c_str());
+    }
+    argv.push_back(nullptr);
+    
+    std::string cmd_path = findCmdInPath(argv[0]);
+    if (!cmd_path.empty()) {
+      execvp(cmd_path.c_str(), (char**)argv.data());
+    } else {
+      execvp(argv[0], (char**)argv.data());
+    }
+    exit(1);
+  } else if (pid > 0) {
+    // 父进程：读取管道输出
+    close(pipefd[1]); // 关闭写端
+    
+    std::string output;
+    char buffer[4096];
+    ssize_t n;
+    
+    while ((n = read(pipefd[0], buffer, sizeof(buffer)-1)) > 0) {
+      buffer[n] = '\0';
+      output += buffer;
+    }
+    
+    close(pipefd[0]);
+    
+    int status;
+    waitpid(pid, &status, 0);
+    
+    return output;
+  } else {
+    std::cerr << "fork failed" << std::endl;
+    close(pipefd[0]);
+    close(pipefd[1]);
+    return "";
+  }
+}
+
+void bgexecv(const std::vector<std::string>& parsed, std::string command) {
+    std::vector<const char*> argv;
+  for (const auto& arg : parsed) {
+    argv.push_back(arg.c_str());
+  }
+  argv.push_back(nullptr);
+
+  pid_t pid = fork();
+  if (pid == 0) {
+    setpgid(0, 0);
+    std::string cmd_path = findCmdInPath(argv[0]);
+    if (!cmd_path.empty()) {
+      execvp(cmd_path.c_str(), (char**)argv.data());
+    } else {
+      execvp(argv[0], (char**)argv.data());
+    }
+    // 如果execvp失败，子进程退出
+    std::cerr << parsed[0] << ": command not found" << std::endl;
+    exit(1);
+  } else if (pid > 0) {
+    Job new_job(pid, command);
+    new_job.addProcess(pid);
+    Jobs::instance().addJob(new_job);
+    std::cout << "[" << new_job.getJobId() << "] " << new_job.getPgid() << std::endl;
+  } else {
+    std::cerr << "fork failed" << std::endl;
+  }
+}
+
+}
