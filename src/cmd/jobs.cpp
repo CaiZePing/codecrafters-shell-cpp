@@ -3,6 +3,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <format>
+#include <signal.h>
 
 extern std::vector<std::string> parseInput(const std::string& command);
 
@@ -337,6 +338,8 @@ void pipeexecv(const std::vector<std::string>& parsed, std::string command) {
         pid_t pid = fork();
         if (pid == 0) {
             // 子进程
+            if(i == 0) setpgid(0, 0);
+
             if (i > 0) {
                 // 不是第一个命令，需要读取前一个管道的输出
                 dup2(pipes[i-1][0], STDIN_FILENO);
@@ -401,6 +404,7 @@ void pipebgexecv(const std::vector<std::string>& parsed, std::string command) {
     size_t num_pipes = num_command - 1;
     int pipes[num_pipes][2];
     int i;
+    
     for (i = 0; i < num_pipes; i++) {
         if (pipe(pipes[i]) == -1) {
             std::cerr << "pipe failed" << std::endl;
@@ -416,6 +420,10 @@ void pipebgexecv(const std::vector<std::string>& parsed, std::string command) {
     for (i = 0; i < num_command; i++) {
         pid_t pid = fork();
         if (pid == 0) {
+            if (i == 0) setpgid(0, 0);
+            else {
+                setpgid(pid, pid[0]);
+            }
             // 子进程
             if (i > 0) {
                 // 不是第一个命令，需要读取前一个管道的输出
@@ -448,6 +456,7 @@ void pipebgexecv(const std::vector<std::string>& parsed, std::string command) {
             }
             exit(1);
         } else if (pid > 0) {
+            setpgid(pid, pid);
             pids[i] = pid;
             // 父进程
             if (i > 0) {
@@ -546,17 +555,6 @@ void builtinexecv(const std::string& input) {
         cmd::complete(parsed);
     } else if (command == "jobs") {
         cmd::jobs(parsed);
-    } else {
-        std::string cmd_path = cmd::findCmdInPath(command);
-        if (!cmd_path.empty()) {
-        if (isBack) {
-            cmd::bgexecv(parsed, input.c_str());
-        } else {
-            cmd::myexecv(parsed, input.c_str());
-        }
-        } else {
-        std::cout << command << ": command not found" << std::endl;
-        }
     }
 
     // 恢复文件描述符

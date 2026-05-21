@@ -220,7 +220,7 @@ void handleInput(const std::string& input) {
 
   for (int i = 0; i < parsed.size() ; i++) {
     if (parsed[i] == "|") {
-      parsed = splitByPipe(parsed);
+      parsed = splitByPipe(parseInput(input));
       if (isBack) {
         cmd::pipebgexecv(parsed, input.c_str());
       } else {
