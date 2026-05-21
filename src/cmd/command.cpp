@@ -246,7 +246,7 @@ void handleInput(const std::string& input) {
   } else if (command == "jobs") {
     cmd::jobs(parsed);
   } else if (command == "history") {
-    cmd::history();
+    cmd::history(parsed);
   } else {
     std::string cmd_path = cmd::findCmdInPath(command);
     if (!cmd_path.empty()) {
