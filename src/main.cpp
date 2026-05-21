@@ -21,9 +21,10 @@ using namespace std;
 int main() {
   string input;
   string pathstring = getenv("PATH");
+  string historyPath = getenv("HISTFILE");
   cmd::populatePATH(pathstring);
   cmd::cacheAllExecutables();
-  // cmd::writeFileToHistory("../shell_history.txt");
+  if (!historyPath.empty()) cmd::writeFileToHistory(historyPath);
   
   // Flush after every cout / cerr
   cout << unitbuf;
