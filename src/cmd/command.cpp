@@ -216,8 +216,19 @@ void handleInput(const std::string& input) {
 
   // 恢复文件描述符
   if (write_into_file && backup_fd != -1) {
-    dup2(backup_fd, target_fd);
+    // 先刷新缓冲区，确保所有数据都被写入
+    fflush(stdout);
+    fflush(stderr);
+    // 恢复文件描述符
+    int result = dup2(backup_fd, target_fd);
+    if (result == -1) {
+      // dup2 失败，打印错误（此时文件描述符已经是原始的了吗？）
+      // 不过我们继续执行
+    }
     close(backup_fd);
+    // 再次刷新，确保恢复后的状态
+    fflush(stdout);
+    fflush(stderr);
   }
 }
 

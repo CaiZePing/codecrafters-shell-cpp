@@ -72,8 +72,8 @@ void myexecv(const std::vector<std::string>& parsed, std::string command) {
 
   pid_t pid = fork();
   if (pid == 0) {
-    // 子进程创建新组
-    setpgid(0, 0);
+    // 子进程创建新组（暂时注释掉）
+    // setpgid(0, 0);
     restore_signal(SIGINT);
     restore_signal(SIGTSTP);
     std::string cmd_path = findCmdInPath(argv[0]);
@@ -86,27 +86,36 @@ void myexecv(const std::vector<std::string>& parsed, std::string command) {
     std::cerr << parsed[0] << ": command not found" << std::endl;
     exit(1);
   } else if (pid > 0) {
-    setpgid(pid, pid);  // 父进程：确保子进程在新进程组中
+    // setpgid(pid, pid);  // 父进程：确保子进程在新进程组中（暂时注释掉）
+    // 临时忽略 SIGTTOU 和 SIGTTIN 信号，避免 tcsetpgrp 调用被中断
+    // struct sigaction old_sigttou, old_sigttin;
     ignore_signal(SIGINT);
     ignore_signal(SIGTSTP);
-    // 将终端控制权交给子进程
-    while (tcsetpgrp(STDIN_FILENO, pid) < 0) {
-        if (errno != EINTR) {
-            break;
-        }
-    }
+    // ignore_signal(SIGTTOU);
+    // ignore_signal(SIGTTIN);
+    
+    // 将终端控制权交给子进程（暂时注释掉）
+    // while (tcsetpgrp(STDIN_FILENO, pid) < 0) {
+    //     if (errno != EINTR) {
+    //         break;
+    //     }
+    // }
     int status;
     while (waitpid(pid, &status, 0) < 0) {
         if (errno != EINTR) {
             break;
         }
     }
-    // 恢复终端控制权
-    while (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0) {
-        if (errno != EINTR) {
-            break;
-        }
-    }
+    // 恢复终端控制权（暂时注释掉）
+    // while (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0) {
+    //     if (errno != EINTR) {
+    //         break;
+    //     }
+    // }
+    
+    // 恢复 SIGTTOU 和 SIGTTIN 信号（使用默认处理）（暂时注释掉）
+    // restore_signal(SIGTTOU);
+    // restore_signal(SIGTTIN);
     restore_signal(SIGINT);
     restore_signal(SIGTSTP);
     // Ctrl+Z 暂停
