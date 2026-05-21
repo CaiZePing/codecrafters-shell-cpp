@@ -61,4 +61,5 @@ void writeFileFromHistory(const std::string& filename) {
     }
     file.close();
   }
+}
 } // namespace cmd
