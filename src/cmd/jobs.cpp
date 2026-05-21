@@ -2,6 +2,7 @@
 
 #include <signal.h>
 #include <sys/wait.h>
+#include <format>
 
 namespace cmd {
 // 忽略信号
@@ -46,7 +47,7 @@ Job& Jobs::getJobByPgid(pid_t pgid) {
 }
 void Jobs::showJobs() {
     for (auto &job : jobs) {
-        std::cout << "[" << job.getJobId() << "] " << job.getCommand() << std::endl;
+        std::cout << std::format("[{}]+  {:27}{}", job.getJobId(), "Running", job.getCommand()) << std::endl;
     }
 }
 
@@ -125,7 +126,8 @@ void myexecv(const std::vector<std::string>& parsed, std::string command) {
         new_job.addProcess(pid);
         new_job.setState(State::STOPPED);
         Jobs::instance().addJob(new_job);
-        std::cout << "[" << new_job.getJobId() << "] " << new_job.getCommand() << std::endl;
+         std::cout << "[" << new_job.getJobId() << "] " << new_job.getPgid() << std::endl;
+        // std::cout << std::format("[{}]+  {:27}{}", new_job.getJobId(), "Running", new_job.getCommand()) << std::endl;
     }
   } else {
     std::cerr << "fork failed" << std::endl;
