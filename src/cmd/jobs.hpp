@@ -3,7 +3,6 @@
 #include "command.hpp"
 
 namespace cmd {
-static size_t next_job_id = 1;  // 下一个作业ID
 // 作业状态（严格对应终端进程状态）
 enum class State : int8_t {
     RUNNING,  // 运行中（前台/后台）
@@ -27,8 +26,8 @@ private:
 class Job {
 public:
     // 构造函数：初始化进程组ID + 作业命令
-    Job(pid_t pgid, const std::string& cmd) 
-        : job_id(next_job_id++), pgid(pgid), command(cmd), state(State::RUNNING) {}
+    Job(size_t job_id, pid_t pgid, const std::string& cmd) 
+        : job_id(job_id), pgid(pgid), command(cmd), state(State::RUNNING) {}
 
     // ---------------- 对外接口 ----------------
     void addProcess(pid_t pid) { processes.emplace_back(pid); }
@@ -49,9 +48,19 @@ private:
 class Jobs {
 public:
     static Jobs& instance() {static Jobs jobs; return jobs;}
-    bool addJob(Job job);
+    Job& CreateJob(pid_t pgid, const std::string& cmd) {
+        if (job_list.size() >= MAX_JOBS) {
+            removeDoneJobs();
+            if (job_list.size() >= MAX_JOBS) {
+                throw std::runtime_error("Too many jobs");
+            }
+        }
+        job_list.emplace_back(allocateJobId(), pgid, cmd);
+        return job_list.back();
+    }
     Job& getJobById(size_t job_id);
     Job& getJobByPgid(pid_t pgid);
+    const std::vector<Job>& getJobs() const { return this->job_list; }
     void showJobs();
     void removeDoneJobs();
     void checkAndUpdateJobState();
@@ -66,6 +75,8 @@ private:
 
     const uint32_t MAX_JOBS = 1024;  // 最大作业数
     std::vector<Job> job_list;
+
+    size_t allocateJobId();
 };
 
 // 当前的前台作业

@@ -20,16 +20,6 @@ static void restore_signal(int sig) {
     sigaction(sig, &sa, nullptr);
 }
 
-bool Jobs::addJob(Job job) {
-    if (job_list.size() >= MAX_JOBS) {
-        Jobs::instance().removeDoneJobs();
-        if (job_list.size() >= MAX_JOBS) {
-            return false;
-        }
-    }
-    job_list.push_back(std::move(job));
-    return true;
-}
 Job& Jobs::getJobById(size_t job_id) {
     for (auto &job : job_list) {
         if (job.getJobId() == job_id) {
@@ -119,6 +109,22 @@ bool Jobs::isSecond(const Job& job) {
     return job_list.size() >= 2 && job_list[job_list.size() - 2].getJobId() == job.getJobId();
 }
 
+size_t Jobs::allocateJobId() {
+    const auto& jobs = job_list;
+
+    if (jobs.empty()) return 1;
+
+    // 找空隙
+    for (int i = 0; i < (int)jobs.size() - 1; ++i) {
+        if (jobs[i].getJobId() + 1 != jobs[i+1].getJobId()) {
+            return jobs[i].getJobId() + 1;
+        }
+    }
+
+    // 都连续，用最后一个 +1
+    return jobs.back().getJobId() + 1;
+}
+
 void jobs(const std::vector<std::string>& parsed) {
     // Implementation for displaying jobs
     Jobs& jobs = Jobs::instance();
@@ -184,11 +190,10 @@ void myexecv(const std::vector<std::string>& parsed, std::string command) {
     // Ctrl+Z 暂停
     if (WIFSTOPPED(status)) {
         // 此时才创建 Job 并加入列表
-        Job new_job(pid, command);
+        Job new_job = Jobs::instance().CreateJob(pid, command);
         new_job.addProcess(pid);
         new_job.setState(State::STOPPED);
-        Jobs::instance().addJob(new_job);
-         std::cout << "[" << new_job.getJobId() << "] " << new_job.getPgid() << std::endl;
+        std::cout << "[" << new_job.getJobId() << "] " << new_job.getPgid() << std::endl;
         // std::cout << std::format("[{}]+  {:27}{}", new_job.getJobId(), "Running", new_job.getCommand()) << std::endl;
     }
   } else {
@@ -274,9 +279,8 @@ void bgexecv(const std::vector<std::string>& parsed, std::string command) {
     std::cerr << parsed[0] << ": command not found" << std::endl;
     exit(1);
   } else if (pid > 0) {
-    Job new_job(pid, command);
+    Job new_job = Jobs::instance().CreateJob(pid, command);
     new_job.addProcess(pid);
-    Jobs::instance().addJob(new_job);
     std::cout << "[" << new_job.getJobId() << "] " << new_job.getPgid() << std::endl;
   } else {
     std::cerr << "fork failed" << std::endl;
