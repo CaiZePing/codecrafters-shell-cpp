@@ -554,6 +554,8 @@ void builtinexecv(const std::string& input) {
         cmd::complete(parsed);
     } else if (command == "jobs") {
         cmd::jobs(parsed);
+    }  else if (command == "history") {
+        cmd::history();
     }
 
     // 恢复文件描述符

@@ -18,6 +18,7 @@
 #include "cd.hpp"
 #include "complete.hpp"
 #include "jobs.hpp"
+#include "history.hpp"
 #include "clear.hpp"
 
 namespace cmd {

@@ -6,7 +6,6 @@ const std::unordered_set<std::string> BUILTIN_COMMANDS{"echo", "type", "exit", "
 std::vector<std::string> executables{};              // 存储所有可执行文件
 std::unordered_map<std::string, std::string> completes{}; // 存储注册命令
 
-
 std::vector<std::string> PATH{};              // 存储PATH环境变量中的所有路径
 
 // 自定义的两个环境变量
@@ -169,7 +168,7 @@ void handleInput(const std::string& input) {
   if (parsed.empty()) {
     return;
   }
-
+  add_to_history(input);
   auto command = parsed[0];
   int backup_fd = -1;
   int target_fd = -1;
@@ -246,6 +245,8 @@ void handleInput(const std::string& input) {
     cmd::complete(parsed);
   } else if (command == "jobs") {
     cmd::jobs(parsed);
+  } else if (command == "history") {
+    cmd::history();
   } else {
     std::string cmd_path = cmd::findCmdInPath(command);
     if (!cmd_path.empty()) {
