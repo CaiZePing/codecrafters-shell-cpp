@@ -51,11 +51,11 @@ void Jobs::showJobs() {
     for (int i = 0; i < job_list.size(); i++) {
         const auto& job = job_list[i];
         if (i == job_list.size() - 1) {
-            std::cout << std::format("[{}]+  {:27}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], job.getCommand()) << std::endl;
+            std::cout << std::format("[{}]+  {:24}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], job.getCommand()) << std::endl;
         } else if (i == job_list.size() - 2) {
-            std::cout << std::format("[{}]-  {:27}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], job.getCommand()) << std::endl;
+            std::cout << std::format("[{}]-  {:24}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], job.getCommand()) << std::endl;
         } else {
-            std::cout << std::format("[{}]   {:27}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], job.getCommand()) << std::endl;
+            std::cout << std::format("[{}]   {:24}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], job.getCommand()) << std::endl;
         }
     }
     Jobs::instance().removeDoneJobs();
