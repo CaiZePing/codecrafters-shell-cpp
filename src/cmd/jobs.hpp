@@ -55,6 +55,8 @@ public:
     void showJobs();
     void removeDoneJobs();
     void checkAndUpdateJobState();
+    bool isFirst(const Job& job);
+    bool isSecond(const Job& job);
 private:
     // 私有构造函数（单例核心）
     Jobs() = default;

@@ -47,18 +47,17 @@ Job& Jobs::getJobByPgid(pid_t pgid) {
     throw std::invalid_argument("Job not found");
 }
 void Jobs::showJobs() {
-    Jobs::instance().checkAndUpdateJobState();
-    for (int i = 0; i < job_list.size(); i++) {
-        const auto& job = job_list[i];
-        if (i == job_list.size() - 1) {
+    // Jobs::instance().checkAndUpdateJobState();
+    for (const auto& job : job_list) {
+        if (isFirst(job)) {
             std::cout << std::format("[{}]+  {}{:17}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], " ", job.getCommand()) << std::endl;
-        } else if (i == job_list.size() - 2) {
+        } else if (isSecond(job)) {
             std::cout << std::format("[{}]-  {}{:17}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], " ", job.getCommand()) << std::endl;
         } else {
             std::cout << std::format("[{}]   {}{:17}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], " ", job.getCommand()) << std::endl;
         }
     }
-    Jobs::instance().removeDoneJobs();
+    // Jobs::instance().removeDoneJobs();
 }
 
 void Jobs::removeDoneJobs() {
@@ -79,11 +78,26 @@ void Jobs::checkAndUpdateJobState() {
             if (WIFEXITED(state)) {
                 job.setState(State::DONE);
                 job.clearCommandSymbol();
+                if (isFirst(job)) {
+                    std::cout << std::format("[{}]+  {}{:17}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], " ", job.getCommand()) << std::endl;
+                } else if (isSecond(job)) {
+                    std::cout << std::format("[{}]-  {}{:17}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], " ", job.getCommand()) << std::endl;
+                } else {
+                    std::cout << std::format("[{}   {}{:17}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], " ", job.getCommand()) << std::endl;
+                }
             } else if (WIFSTOPPED(state)) {
                 job.setState(State::STOPPED);
             }
         }
     }
+    Jobs::instance().removeDoneJobs();
+}
+
+bool Jobs::isFirst(const Job& job) {
+    return !job_list.empty() && job_list.back().getJobId() == job.getJobId();
+}
+bool Jobs::isSecond(const Job& job) {
+    return job_list.size() >= 2 && job_list[job_list.size() - 2].getJobId() == job.getJobId();
 }
 
 void jobs(const std::vector<std::string>& parsed) {
