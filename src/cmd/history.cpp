@@ -8,7 +8,7 @@ namespace cmd {
 std::vector<std::string> HISTORY{};
 void history() {
   for (int i = 0; i < HISTORY.size(); i++) {
-    std::cout << std::format("    {:2d}: {}", i + 1, HISTORY[i]) << std::endl;
+    std::cout << std::format("    {:<2d} {}", i + 1, HISTORY[i]) << std::endl;
   }
 }
 
