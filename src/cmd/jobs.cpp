@@ -1,6 +1,7 @@
 #include "command.hpp"
 
 #include <signal.h>
+#include <sys/wait.h>
 
 namespace cmd {
 // 忽略信号
