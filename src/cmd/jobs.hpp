@@ -36,7 +36,7 @@ public:
     pid_t getPgid() const { return pgid; }
     State getState() const { return state; }
     const std::string& getCommand() const { return command; }
-    void clearCommandSymbol() { if (!command.empty() && command.back() == '&') command.pop_back(); command.pop_back(); }
+    void clearCommandSymbol() { if (!command.empty() && command.back() == '&') {command.pop_back(); command.pop_back();} }
     void setState(State new_state) { state = new_state; }
 private:
     size_t job_id;            // job 的 id
