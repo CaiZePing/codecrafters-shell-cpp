@@ -53,9 +53,13 @@ void handleVariable(std::vector<std::string>& parsed) {
                 it += temp;
             } else if (variables.find(key) != variables.end()) {
                 it = temp + variables[key];
+            } else {
+                it = temp;
             }
             pos = it.find('$');
         }
     }
+    // 将所有空字符串移除
+    parsed.erase(std::remove(parsed.begin(), parsed.end(), ""), parsed.end());
 }
 }
