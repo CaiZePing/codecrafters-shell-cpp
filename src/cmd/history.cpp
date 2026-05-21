@@ -12,6 +12,9 @@ void history(const std::vector<std::string>& parsed) {
     if (parsed[1] == "-r") {
       // 处理 -r 选项
       writeFileToHistory(parsed[2]);
+    } else if (parsed[1] == "-w") {
+      // 处理 -w 选项
+      writeFileFromHistory(parsed[2]);
     }
   } else if (parsed.size() == 2) {
     int index = 0;
@@ -49,4 +52,13 @@ void writeFileToHistory(const std::string& filename) {
     file.close();
   }
 }
+void writeFileFromHistory(const std::string& filename) {
+  // 将 HISTORY 中的记录写入文件
+  std::ofstream file(filename);
+  if (file.is_open()) {
+    for (const auto& line : HISTORY) {
+      file << line << std::endl;
+    }
+    file.close();
+  }
 } // namespace cmd
