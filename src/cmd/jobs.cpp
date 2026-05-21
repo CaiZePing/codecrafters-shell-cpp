@@ -78,6 +78,7 @@ void Jobs::checkAndUpdateJobState() {
         if (result > 0) {
             if (WIFEXITED(state)) {
                 job.setState(State::DONE);
+                job.clearCommandSymbol();
             } else if (WIFSTOPPED(state)) {
                 job.setState(State::STOPPED);
             }
