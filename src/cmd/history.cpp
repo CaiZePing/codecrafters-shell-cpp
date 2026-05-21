@@ -66,11 +66,12 @@ void writeFileFromHistory(const std::string& filename) {
   }
 }
 void writeFileAppFromHistory(const std::string& filename) {
+  static size_t index = 0;
   // 将 HISTORY 中的记录追加到文件
   std::ofstream file(filename, std::ios::app);
   if (file.is_open()) {
-    for (const auto& line : HISTORY) {
-      file << line << std::endl;
+    for (; index < HISTORY.size(); index++) {
+      file << HISTORY[index] << std::endl;
     }
     file.close();
   }
