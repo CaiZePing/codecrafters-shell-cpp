@@ -47,7 +47,7 @@ Job& Jobs::getJobByPgid(pid_t pgid) {
     throw std::invalid_argument("Job not found");
 }
 void Jobs::showJobs() {
-    // Jobs::instance().checkAndUpdateJobState();
+    Jobs::instance().checkAndUpdateJobState();
     for (const auto& job : job_list) {
         if (isFirst(job)) {
             std::cout << std::format("[{}]+  {}{:17}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], " ", job.getCommand()) << std::endl;
@@ -57,7 +57,7 @@ void Jobs::showJobs() {
             std::cout << std::format("[{}]   {}{:17}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], " ", job.getCommand()) << std::endl;
         }
     }
-    // Jobs::instance().removeDoneJobs();
+    Jobs::instance().removeDoneJobs();
 }
 
 void Jobs::removeDoneJobs() {
@@ -78,12 +78,31 @@ void Jobs::checkAndUpdateJobState() {
             if (WIFEXITED(state)) {
                 job.setState(State::DONE);
                 job.clearCommandSymbol();
+            } else if (WIFSTOPPED(state)) {
+                job.setState(State::STOPPED);
+            }
+        }
+    }
+}
+
+void Jobs::checkAndRemoveJob() {
+    for (auto &job : job_list) {
+        // 跳过已经结束的进程组
+        if (job.getState() == State::DONE || job.getState() == State::STOPPED) {
+            continue;
+        }
+        int state;
+        pid_t result = waitpid(-job.getPgid(), &state, WNOHANG);
+        if (result > 0) {
+            if (WIFEXITED(state)) {
+                job.setState(State::DONE);
+                job.clearCommandSymbol();
                 if (isFirst(job)) {
                     std::cout << std::format("[{}]+  {}{:17}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], " ", job.getCommand()) << std::endl;
                 } else if (isSecond(job)) {
                     std::cout << std::format("[{}]-  {}{:17}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], " ", job.getCommand()) << std::endl;
                 } else {
-                    std::cout << std::format("[{}   {}{:17}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], " ", job.getCommand()) << std::endl;
+                    std::cout << std::format("[{}]   {}{:17}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], " ", job.getCommand()) << std::endl;
                 }
             } else if (WIFSTOPPED(state)) {
                 job.setState(State::STOPPED);

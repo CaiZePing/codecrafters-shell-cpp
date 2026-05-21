@@ -82,7 +82,7 @@ void cacheAllExecutables() {
 }
 
 bool readInput(std::string &input) {
-  Jobs::instance().checkAndUpdateJobState();
+  Jobs::instance().checkAndRemoveJob();
   rl_already_prompted = 0;
   char *line = readline("$ ");
 

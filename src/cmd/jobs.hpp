@@ -55,6 +55,7 @@ public:
     void showJobs();
     void removeDoneJobs();
     void checkAndUpdateJobState();
+    void checkAndRemoveJob();
     bool isFirst(const Job& job);
     bool isSecond(const Job& job);
 private:
