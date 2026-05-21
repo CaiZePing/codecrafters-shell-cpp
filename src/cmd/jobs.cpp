@@ -247,9 +247,8 @@ std::string stdoutexecv(const std::vector<std::string>& parsed, std::string comm
     dup2(pipefd[1], STDERR_FILENO); // 也捕获标准错误
     close(pipefd[1]);
     
-    std::vector<std::string> args = parseInput(command);
     std::vector<const char*> argv;
-    for (const auto& arg : args) {
+    for (const auto& arg : parsed) {
         argv.push_back(arg.c_str());
     }
     argv.push_back(nullptr);
