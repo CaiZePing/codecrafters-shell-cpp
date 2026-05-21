@@ -19,12 +19,12 @@ void declare(const std::vector<std::string>& parsed) {
             std::string key = parsed[1].substr(0, pos);
             // key 它以字母或下划线开头，其余部分可以使用字母、数字和下划线
             if (!std::isalpha(key[0]) && key[0] != '_') {
-                std::cerr << "declare: `" << key << "\': not a valid identifier" << std::endl;
+                std::cerr << "declare: `" << parsed[1] << "\': not a valid identifier" << std::endl;
                 return;
             }
             for (const char c : key) {
                 if (!std::isalnum(c) && c != '_') {
-                    std::cerr << "declare: `" << key << "\': not a valid identifier" << std::endl;
+                    std::cerr << "declare: `" << parsed[1] << "\': not a valid identifier" << std::endl;
                     return;
                 }
             }
