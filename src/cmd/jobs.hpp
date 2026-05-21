@@ -96,4 +96,6 @@ void bgexecv(const std::vector<std::string>& parsed, std::string command);
 void pipeexecv(const std::vector<std::string>& parsed, std::string command);
 // 在后台执行管道命令
 void pipebgexecv(const std::vector<std::string>& parsed, std::string command);
+// 执行内建命令
+void builtinexecv(const std::string& input);
 }

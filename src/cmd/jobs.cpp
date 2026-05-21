@@ -246,9 +246,10 @@ std::string stdoutexecv(const std::vector<std::string>& parsed, std::string comm
     dup2(pipefd[1], STDERR_FILENO); // 也捕获标准错误
     close(pipefd[1]);
     
+    std::vector<std::string> args = parseInput(command);
     std::vector<const char*> argv;
-    for (const auto& arg : parsed) {
-      argv.push_back(arg.c_str());
+    for (const auto& arg : args) {
+        argv.push_back(arg.c_str());
     }
     argv.push_back(nullptr);
     
@@ -356,6 +357,10 @@ void pipeexecv(const std::vector<std::string>& parsed, std::string command) {
             }
             argv.push_back(nullptr);
             std::string cmd_path = findCmdInPath(argv[0]);
+            if (isBuiltinCommand(argv[0])) {
+                builtinexecv(parsed[i]);
+                exit(0);
+            }
             if (!cmd_path.empty()) {
                 execvp(cmd_path.c_str(), (char**)argv.data());
             } else {
@@ -432,6 +437,10 @@ void pipebgexecv(const std::vector<std::string>& parsed, std::string command) {
             }
             argv.push_back(nullptr);
             std::string cmd_path = findCmdInPath(argv[0]);
+            if (isBuiltinCommand(argv[0])) {
+                builtinexecv(parsed[i]);
+                exit(0);
+            }
             if (!cmd_path.empty()) {
                 execvp(cmd_path.c_str(), (char**)argv.data());
             } else {
@@ -453,7 +462,7 @@ void pipebgexecv(const std::vector<std::string>& parsed, std::string command) {
     }
 
     if (pids[num_command - 1] > 0) {
-        Job new_job = Jobs::instance().CreateJob(pids[num_command - 1], command);
+        Job new_job = Jobs::instance().CreateJob(pids[0], command);
         for (int j = 0; j < num_command; j++) {
             new_job.addProcess(pids[j]);
         }
@@ -463,6 +472,108 @@ void pipebgexecv(const std::vector<std::string>& parsed, std::string command) {
         }
         new_job.checkAndUpdateState();
         std::cout << "[" << new_job.getJobId() << "] " << new_job.getPgid() << std::endl;
+    }
+}
+
+// 执行内建命令
+void builtinexecv(const std::string& input) {
+    auto parsed = parseInput(input);
+    if (parsed.empty()) {
+        return;
+    }
+
+    auto command = parsed[0];
+    int backup_fd = -1;
+    int target_fd = -1;
+    bool write_into_file = false;
+    bool isBack = false;
+    std::string file;
+
+    if (parsed.size() > 1) {
+        std::string last_arg = parsed[parsed.size() - 1];
+        if (last_arg == "&") {
+        parsed.pop_back();
+        isBack = true;
+        }
+    }
+
+    if (parsed.size() > 2) {
+        std::string redirection = parsed[parsed.size() - 2];
+        if (redirection.back() == '>') {
+        write_into_file = true;
+        file = parsed[parsed.size() - 1];
+        parsed.pop_back();
+        parsed.pop_back();
+        
+        int flags = O_WRONLY | O_CREAT;
+        target_fd = STDOUT_FILENO;
+        
+        if (redirection == ">>" || redirection == "1>>") {
+            flags |= O_APPEND;
+        } else if (redirection == "2>" || redirection == "2>>") {
+            target_fd = STDERR_FILENO;
+            if (redirection == "2>>") flags |= O_APPEND;
+            else flags |= O_TRUNC;
+        } else {
+            flags |= O_TRUNC; // 默认 > 覆盖
+        }
+        
+        int fd = open(file.c_str(), flags, 0644);
+        if (fd == -1) {
+            std::cerr << "cannot open " << file << ": Permission denied" << std::endl;
+            return;
+        }
+        
+        backup_fd = dup(target_fd);
+        dup2(fd, target_fd);
+        close(fd);
+        }
+    }
+
+    if (command == "exit") {
+        exit(0);
+    } else if (command == "echo") {
+        cmd::echo(parsed);
+    } else if (command == "type") {
+        cmd::type(parsed);
+    } else if (command == "pwd") {
+        cmd::pwd();
+    } else if (command == "cd") {
+        cmd::cd(parsed);
+    } else if (command == "clear") {
+        cmd::clear();
+    } else if (command == "complete") {
+        cmd::complete(parsed);
+    } else if (command == "jobs") {
+        cmd::jobs(parsed);
+    } else {
+        std::string cmd_path = cmd::findCmdInPath(command);
+        if (!cmd_path.empty()) {
+        if (isBack) {
+            cmd::bgexecv(parsed, input.c_str());
+        } else {
+            cmd::myexecv(parsed, input.c_str());
+        }
+        } else {
+        std::cout << command << ": command not found" << std::endl;
+        }
+    }
+
+    // 恢复文件描述符
+    if (write_into_file && backup_fd != -1) {
+        // 先刷新缓冲区，确保所有数据都被写入
+        fflush(stdout);
+        fflush(stderr);
+        // 恢复文件描述符
+        int result = dup2(backup_fd, target_fd);
+        if (result == -1) {
+        // dup2 失败，打印错误（此时文件描述符已经是原始的了吗？）
+        // 不过我们继续执行
+        }
+        close(backup_fd);
+        // 再次刷新，确保恢复后的状态
+        fflush(stdout);
+        fflush(stderr);
     }
 }
 }

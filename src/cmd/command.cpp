@@ -81,6 +81,17 @@ void cacheAllExecutables() {
   }
 }
 
+// 是内部命令
+bool isBuiltinCommand(const std::string& command) {
+  std::string cmd{};
+  int c;
+  for (int i = 0; i < command.length(); i++) {
+    c = command[i];
+    cmd += c;
+  }
+  return BUILTIN_COMMANDS.find(cmd) != BUILTIN_COMMANDS.end();
+}
+
 bool readInput(std::string &input) {
   Jobs::instance().checkAndRemoveJob();
   rl_already_prompted = 0;
@@ -206,13 +217,14 @@ void handleInput(const std::string& input) {
       close(fd);
     }
   }
-  
-  for (const auto& arg : parsed) {
-    if (arg == "|") {
+
+  for (int i = 0; i < parsed.size() ; i++) {
+    if (parsed[i] == "|") {
+      parsed = splitByPipe(parsed);
       if (isBack) {
-        cmd::pipebgexecv(splitByPipe(parsed), input.c_str());
+        cmd::pipebgexecv(parsed, input.c_str());
       } else {
-        cmd::pipeexecv(splitByPipe(parsed), input.c_str());
+        cmd::pipeexecv(parsed, input.c_str());
       }
       return;
     }
