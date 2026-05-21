@@ -23,6 +23,7 @@ int main() {
   string pathstring = getenv("PATH");
   cmd::populatePATH(pathstring);
   cmd::cacheAllExecutables();
+  // cmd::writeFileToHistory("../shell_history.txt");
   
   // Flush after every cout / cerr
   cout << unitbuf;

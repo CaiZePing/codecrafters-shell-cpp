@@ -2,17 +2,22 @@
 
 #include <iostream>
 #include <format>
-
+#include <fstream>
 
 namespace cmd {
 std::vector<std::string> HISTORY{};
 void history(const std::vector<std::string>& parsed) {
   // 将 parsed 中的命令解析为整数
-  if (parsed.size() > 1) {
+  if (parsed.size() == 3) { 
+    if (parsed[1] == "-r") {
+      // 处理 -r 选项
+      writeFileToHistory(parsed[2]);
+    }
+  } else if (parsed.size() == 2) {
     int index = 0;
     if (!parsed.empty()) {
       try {
-        index = std::stoi(parsed[parsed.size() - 1]);
+        index = std::stoi(parsed[1]);
       } catch (const std::exception&) {
         std::cerr << "Invalid history index" << std::endl;
         return;
@@ -31,5 +36,17 @@ void history(const std::vector<std::string>& parsed) {
 
 void add_to_history(const std::string& command) {
   HISTORY.push_back(command);
+}
+
+void writeFileToHistory(const std::string& filename) {
+  // 将文件中的历史记录按行写入 HISTORY
+  std::ifstream file(filename);
+  std::string line;
+  if (file.is_open()) {
+    while (std::getline(file, line) ) {
+      if (!line.empty()) HISTORY.push_back(line);
+    }
+    file.close();
+  }
 }
 } // namespace cmd
