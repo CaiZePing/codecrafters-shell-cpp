@@ -89,14 +89,24 @@ void myexecv(const std::vector<std::string>& parsed, std::string command) {
     setpgid(pid, pid);  // 父进程：确保子进程在新进程组中
     ignore_signal(SIGINT);
     ignore_signal(SIGTSTP);
-    tcsetpgrp(STDIN_FILENO, pid);  // 将终端控制权交给子进程
+    // 将终端控制权交给子进程
+    while (tcsetpgrp(STDIN_FILENO, pid) < 0) {
+        if (errno != EINTR) {
+            break;
+        }
+    }
     int status;
     while (waitpid(pid, &status, 0) < 0) {
         if (errno != EINTR) {
             break;
         }
     }
-    tcsetpgrp(STDIN_FILENO, getpgrp()); // 恢复终端控制权
+    // 恢复终端控制权
+    while (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0) {
+        if (errno != EINTR) {
+            break;
+        }
+    }
     restore_signal(SIGINT);
     restore_signal(SIGTSTP);
     // Ctrl+Z 暂停
