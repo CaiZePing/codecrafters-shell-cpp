@@ -7,6 +7,7 @@ std::vector<std::string> executables{};              // 存储所有可执行文
 std::unordered_map<std::string, std::string> completes{}; // 存储注册命令
 
 std::vector<std::string> PATH{};              // 存储PATH环境变量中的所有路径
+std::string HISTORYPATH{};
 
 // 自定义的两个环境变量
 std::string COMP_LINE{};
@@ -230,6 +231,7 @@ void handleInput(const std::string& input) {
   }
 
   if (command == "exit") {
+    writeFileFromHistory(HISTORYPATH);
     exit(0);
   } else if (command == "echo") {
     cmd::echo(parsed);

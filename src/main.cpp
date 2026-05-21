@@ -22,9 +22,12 @@ int main() {
   string input;
   string pathstring = getenv("PATH");
   const char* historyPath = getenv("HISTFILE");
+  if (historyPath) {
+    cmd::HISTORYPATH = historyPath;
+  }
   cmd::populatePATH(pathstring);
   cmd::cacheAllExecutables();
-  if (historyPath) cmd::writeFileToHistory(historyPath);
+  cmd::writeFileToHistory(cmd::HISTORYPATH);
   
   // Flush after every cout / cerr
   cout << unitbuf;
