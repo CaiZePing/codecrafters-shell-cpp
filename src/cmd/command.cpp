@@ -177,6 +177,9 @@ void handleInput(const std::string& input) {
   bool isBack = false;
   std::string file;
 
+  // 将所有前面是 $ 的如果是内部变量，都替换 value
+  handleVariable(parsed);
+
   if (parsed.size() > 1) {
     std::string last_arg = parsed[parsed.size() - 1];
     if (last_arg == "&") {

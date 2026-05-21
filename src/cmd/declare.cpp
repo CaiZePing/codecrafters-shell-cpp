@@ -32,4 +32,15 @@ void declare(const std::vector<std::string>& parsed) {
         }
     }
 }
+
+void handleVariable(std::vector<std::string>& parsed) {
+    for (auto& it : parsed) {
+        if (it[0] == '$') {
+            std::string key = it.substr(1);
+            if (variables.find(key) != variables.end()) {
+                it = variables[key];
+            }
+        }
+    }
+}
 }
