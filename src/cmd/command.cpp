@@ -165,12 +165,12 @@ std::vector<std::string> splitByPipe(const std::vector<std::string>& parsed) {
 
 // 处理输入
 void handleInput(const std::string& input) {
-  auto parsed = parseInput(input);
+  std::vector<std::string> parsed = parseInput(input);
   if (parsed.empty()) {
     return;
   }
   add_to_history(input);
-  auto command = parsed[0];
+  std::string command = parsed[0];
   int backup_fd = -1;
   int target_fd = -1;
   bool write_into_file = false;

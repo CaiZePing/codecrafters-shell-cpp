@@ -37,22 +37,22 @@ void handleVariable(std::vector<std::string>& parsed) {
     for (auto& it : parsed) {
         int pos = it.find('$');
         while (pos != std::string::npos) {
-            if (pos != std::string::npos) {
-                std::string temp = it.substr(0, pos);
-                std::string key = it.substr(pos + 1);
-                if (key[1] == '{') {
-                    key = key.substr(1, key.length() - 2);
-                    pos = key.find('}');
-                    if (pos != std::string::npos) {
-                        key = key.substr(0, pos);
-                        if (variables.find(key) != variables.end()) {
-                            it = temp + variables[key];
-                        }
+            std::string temp = it.substr(0, pos);
+            std::string key = it.substr(pos + 1);
+            if (key[0] == '{') {
+                it = temp;
+                key = key.substr(1);
+                pos = key.find('}');
+                if (pos != std::string::npos) {
+                    temp = key.substr(pos +1);
+                    key = key.substr(0, pos);
+                    if (variables.find(key) != variables.end()) {
+                        it += variables[key];
                     }
-                    it = it + key.substr(pos + 1);
-                } else if (variables.find(key) != variables.end()) {
-                    it = temp + variables[key];
                 }
+                it += temp;
+            } else if (variables.find(key) != variables.end()) {
+                it = temp + variables[key];
             }
             pos = it.find('$');
         }
