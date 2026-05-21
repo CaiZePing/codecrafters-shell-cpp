@@ -91,7 +91,11 @@ void myexecv(const std::vector<std::string>& parsed, std::string command) {
     ignore_signal(SIGTSTP);
     tcsetpgrp(STDIN_FILENO, pid);  // 将终端控制权交给子进程
     int status;
-    waitpid(pid, &status, 0);
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) {
+            break;
+        }
+    }
     tcsetpgrp(STDIN_FILENO, getpgrp()); // 恢复终端控制权
     restore_signal(SIGINT);
     restore_signal(SIGTSTP);
