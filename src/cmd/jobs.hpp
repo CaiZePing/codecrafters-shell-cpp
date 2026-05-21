@@ -10,6 +10,7 @@ enum class State : int8_t {
     STOPPED,  // 暂停（Ctrl+Z）
     DONE      // 执行完毕
 };
+extern const char* StateStr[3];
 // 进程
 class Process {
 public:
@@ -52,6 +53,7 @@ public:
     Job& getJobByPgid(pid_t pgid);
     void showJobs();
     void removeDoneJobs();
+    void checkAndUpdateJobState();
 private:
     // 私有构造函数（单例核心）
     Jobs() = default;
@@ -59,7 +61,7 @@ private:
     Jobs& operator=(const Jobs&) = delete;
 
     const uint32_t MAX_JOBS = 1024;  // 最大作业数
-    std::vector<Job> jobs;
+    std::vector<Job> job_list;
 };
 
 // 当前的前台作业

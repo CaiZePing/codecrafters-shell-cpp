@@ -5,6 +5,7 @@
 #include <format>
 
 namespace cmd {
+const char* StateStr[3] = {"Running", "Stopped", "Done"};
 // 忽略信号
 static void ignore_signal(int sig) {
     struct sigaction sa = {};
@@ -20,17 +21,17 @@ static void restore_signal(int sig) {
 }
 
 bool Jobs::addJob(Job job) {
-    if (jobs.size() >= MAX_JOBS) {
+    if (job_list.size() >= MAX_JOBS) {
         Jobs::instance().removeDoneJobs();
-        if (jobs.size() >= MAX_JOBS) {
+        if (job_list.size() >= MAX_JOBS) {
             return false;
         }
     }
-    jobs.push_back(std::move(job));
+    job_list.push_back(std::move(job));
     return true;
 }
 Job& Jobs::getJobById(size_t job_id) {
-    for (auto &job : jobs) {
+    for (auto &job : job_list) {
         if (job.getJobId() == job_id) {
             return job;
         }
@@ -38,7 +39,7 @@ Job& Jobs::getJobById(size_t job_id) {
     throw std::invalid_argument("Job not found");
 }
 Job& Jobs::getJobByPgid(pid_t pgid) {
-    for (auto &job : jobs) {
+    for (auto &job : job_list) {
         if (job.getPgid() == pgid) {
             return job;
         }
@@ -46,22 +47,42 @@ Job& Jobs::getJobByPgid(pid_t pgid) {
     throw std::invalid_argument("Job not found");
 }
 void Jobs::showJobs() {
-    for (int i = 0; i < jobs.size(); i++) {
-        const auto& job = jobs[i];
-        if (i == jobs.size() - 1) {
-            std::cout << std::format("[{}]+  {:27}{}", job.getJobId(), "Running", job.getCommand()) << std::endl;
-        } else if (i == jobs.size() - 2) {
-            std::cout << std::format("[{}]-  {:27}{}", job.getJobId(), "Running", job.getCommand()) << std::endl;
+    Jobs::instance().checkAndUpdateJobState();
+    for (int i = 0; i < job_list.size(); i++) {
+        const auto& job = job_list[i];
+        if (i == job_list.size() - 1) {
+            std::cout << std::format("[{}]+  {:27}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], job.getCommand()) << std::endl;
+        } else if (i == job_list.size() - 2) {
+            std::cout << std::format("[{}]-  {:27}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], job.getCommand()) << std::endl;
         } else {
-            std::cout << std::format("[{}]   {:27}{}", job.getJobId(), "Running", job.getCommand()) << std::endl;
+            std::cout << std::format("[{}]   {:27}{}", job.getJobId(), StateStr[static_cast<int>(job.getState())], job.getCommand()) << std::endl;
         }
     }
+    Jobs::instance().removeDoneJobs();
 }
 
 void Jobs::removeDoneJobs() {
-    jobs.erase(std::remove_if(jobs.begin(), jobs.end(), [](const Job& job) {
+    job_list.erase(std::remove_if(job_list.begin(), job_list.end(), [](const Job& job) {
         return job.getState() == State::DONE;
-    }), jobs.end());
+    }), job_list.end());
+}
+
+void Jobs::checkAndUpdateJobState() {
+    for (auto &job : job_list) {
+        // 跳过已经结束的进程组
+        if (job.getState() == State::DONE || job.getState() == State::STOPPED) {
+            continue;
+        }
+        int state;
+        pid_t result = waitpid(-job.getPgid(), &state, WNOHANG);
+        if (result > 0) {
+            if (WIFEXITED(state)) {
+                job.setState(State::DONE);
+            } else if (WIFSTOPPED(state)) {
+                job.setState(State::STOPPED);
+            }
+        }
+    }
 }
 
 void jobs(const std::vector<std::string>& parsed) {
