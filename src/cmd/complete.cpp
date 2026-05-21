@@ -16,7 +16,7 @@ extern const std::unordered_set<std::string> BUILTIN_COMMANDS;
 extern std::unordered_map<std::string, std::string> completes;
 
 extern std::vector<std::string> parseInput(const std::string& command);
-extern std::string pipeexecv(const std::vector<std::string>& parsed, std::string command);
+extern std::string stdoutexecv(const std::vector<std::string>& parsed, std::string command);
 
 void complete(const std::vector<std::string>& parsed) {
   if (parsed.size() < 3) {
@@ -107,7 +107,7 @@ char* externalCompletionGenerator(const char *text, int state) {
     cmd_args.push_back(cmd_name);
     cmd_args.push_back(current_word);
     cmd_args.push_back(previous_word);
-    std::string output = pipeexecv(cmd_args, it->second);
+    std::string output = stdoutexecv(cmd_args, it->second);
     
     std::stringstream ss(output);
     std::string line;

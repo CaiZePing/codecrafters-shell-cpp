@@ -35,8 +35,10 @@ public:
     pid_t getPgid() const { return pgid; }
     State getState() const { return state; }
     const std::string& getCommand() const { return command; }
-    void clearCommandSymbol() { if (!command.empty() && command.back() == '&') {command.pop_back(); command.pop_back();} }
+    const std::vector<Process>& getProcesses() const { return processes; }
     void setState(State new_state) { state = new_state; }
+    void clearCommandSymbol() { if (!command.empty() && command.back() == '&') {command.pop_back(); command.pop_back();} }
+    void checkAndUpdateState();
 private:
     size_t job_id;            // job 的 id
     pid_t pgid;               // 组ID
@@ -87,7 +89,11 @@ void jobs(const std::vector<std::string>& parsed);
 // 执行命令
 void myexecv(const std::vector<std::string>& parsed, std::string command);
 // 执行管道命令并捕获输出
-std::string pipeexecv(const std::vector<std::string>& parsed, std::string command);
+std::string stdoutexecv(const std::vector<std::string>& parsed, std::string command);
 // 在后台执行命令
 void bgexecv(const std::vector<std::string>& parsed, std::string command);
+// 执行管道命令
+void pipeexecv(const std::vector<std::string>& parsed, std::string command);
+// 在后台执行管道命令
+void pipebgexecv(const std::vector<std::string>& parsed, std::string command);
 }

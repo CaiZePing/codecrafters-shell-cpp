@@ -131,6 +131,27 @@ std::vector<std::string> parseInput(const std::string& command) {
   return parsed;
 }
 
+std::vector<std::string> splitByPipe(const std::vector<std::string>& parsed) {
+  std::vector<std::string> commands;
+  std::string current_command;
+  for (const auto& arg : parsed) {
+    if (arg == "|") {
+      commands.push_back(current_command);
+      current_command.clear();
+    } else {
+      if (current_command.empty()) {
+        current_command = arg;
+      } else {
+        current_command = current_command + " " + arg;
+      }
+    }
+  }
+  if (!current_command.empty()) {
+    commands.push_back(current_command);
+  }
+  return commands;
+}
+
 // 处理输入
 void handleInput(const std::string& input) {
   auto parsed = parseInput(input);
@@ -186,6 +207,17 @@ void handleInput(const std::string& input) {
     }
   }
   
+  for (const auto& arg : parsed) {
+    if (arg == "|") {
+      if (isBack) {
+        cmd::pipebgexecv(splitByPipe(parsed), input.c_str());
+      } else {
+        cmd::pipeexecv(splitByPipe(parsed), input.c_str());
+      }
+      return;
+    }
+  }
+
   if (command == "exit") {
     exit(0);
   } else if (command == "echo") {

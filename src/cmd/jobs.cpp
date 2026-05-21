@@ -4,6 +4,8 @@
 #include <sys/wait.h>
 #include <format>
 
+extern std::vector<std::string> parseInput(const std::string& command);
+
 namespace cmd {
 const char* StateStr[3] = {"Running", "Stopped", "Done"};
 // 忽略信号
@@ -18,6 +20,31 @@ static void restore_signal(int sig) {
     struct sigaction sa = {};
     sa.sa_handler = SIG_DFL;
     sigaction(sig, &sa, nullptr);
+}
+
+void Job::checkAndUpdateState() {
+    bool noDone = false;
+    for (auto &process : processes) {
+        // 跳过已经结束的进程组
+        if (process.getState() == State::DONE || process.getState() == State::STOPPED) {
+            continue;
+        }
+        int state;
+        pid_t result = waitpid(-process.getPid(), &state, WNOHANG);
+        if (result > 0) {
+            if (WIFEXITED(state)) {
+                process.setState(State::DONE);
+            } else if (WIFSTOPPED(state)) {
+                process.setState(State::STOPPED);
+                noDone = true;
+            } else {
+                noDone = true;
+            }
+        }
+    }
+    if (!noDone) {
+        state = State::DONE;
+    }
 }
 
 Job& Jobs::getJobById(size_t job_id) {
@@ -202,7 +229,7 @@ void myexecv(const std::vector<std::string>& parsed, std::string command) {
 }
 
 // 执行管道命令并捕获标准输出
-std::string pipeexecv(const std::vector<std::string>& parsed, std::string command) {
+std::string stdoutexecv(const std::vector<std::string>& parsed, std::string command) {
   int pipefd[2];
   if (pipe(pipefd) == -1) {
     std::cerr << "pipe failed" << std::endl;
@@ -287,4 +314,155 @@ void bgexecv(const std::vector<std::string>& parsed, std::string command) {
   }
 }
 
+// 执行管道命令
+void pipeexecv(const std::vector<std::string>& parsed, std::string command) {
+    size_t num_command = parsed.size();
+    size_t num_pipes = num_command - 1;
+    int pipes[num_pipes][2];
+    int i;
+    for (i = 0; i < num_pipes; i++) {
+        if (pipe(pipes[i]) == -1) {
+            std::cerr << "pipe failed" << std::endl;
+            return;
+        }
+    }
+
+    pid_t pids[num_command];
+    for (i = 0; i < num_command; i++) {
+        pids[i] = -1;
+    }
+
+    for (i = 0; i < num_command; i++) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            // 子进程
+            if (i > 0) {
+                // 不是第一个命令，需要读取前一个管道的输出
+                dup2(pipes[i-1][0], STDIN_FILENO);
+                close(pipes[i-1][0]);
+                close(pipes[i-1][1]);
+            }
+            if (i < num_command - 1) {
+                // 不是最后一个命令，需要将输出写入下一个管道
+                dup2(pipes[i][1], STDOUT_FILENO);
+                close(pipes[i][0]);
+                close(pipes[i][1]);
+            }
+            // 执行命令
+            std::vector<std::string> args = parseInput(parsed[i]);
+            std::vector<const char*> argv;
+            for (const auto& arg : args) {
+                argv.push_back(arg.c_str());
+            }
+            argv.push_back(nullptr);
+            std::string cmd_path = findCmdInPath(argv[0]);
+            if (!cmd_path.empty()) {
+                execvp(cmd_path.c_str(), (char**)argv.data());
+            } else {
+                execvp(argv[0], (char**)argv.data());
+            }
+            exit(1);
+        } else if (pid > 0) {
+            pids[i] = pid;
+            // 父进程
+            if (i > 0) {
+                close(pipes[i-1][0]);
+            }
+            if (i < num_pipes) {
+                close(pipes[i][1]);
+            }
+        } else {
+            std::cerr << "fork failed" << std::endl;
+        }
+    }
+
+    if (pids[num_command - 1] > 0) {
+        int status;
+        waitpid(pids[num_command - 1], &status, 0);
+        if (WIFSTOPPED(status)) {
+            auto job = Jobs::instance().CreateJob(pids[0], command);
+            job.setState(State::STOPPED);
+            for (int j = 1; j < num_command; j++) {
+                job.addProcess(pids[j]);
+            }
+            job.checkAndUpdateState();
+            std::cout << "[" << job.getJobId() << "] " << job.getPgid() << std::endl;
+        }
+    }
+}
+// 在后台执行管道命令
+void pipebgexecv(const std::vector<std::string>& parsed, std::string command) {
+    size_t num_command = parsed.size();
+    size_t num_pipes = num_command - 1;
+    int pipes[num_pipes][2];
+    int i;
+    for (i = 0; i < num_pipes; i++) {
+        if (pipe(pipes[i]) == -1) {
+            std::cerr << "pipe failed" << std::endl;
+            return;
+        }
+    }
+
+    pid_t pids[num_command];
+    for (i = 0; i < num_command; i++) {
+        pids[i] = -1;
+    }
+
+    for (i = 0; i < num_command; i++) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            // 子进程
+            if (i > 0) {
+                // 不是第一个命令，需要读取前一个管道的输出
+                dup2(pipes[i-1][0], STDIN_FILENO);
+                close(pipes[i-1][0]);
+                close(pipes[i-1][1]);
+            }
+            if (i < num_command - 1) {
+                // 不是最后一个命令，需要将输出写入下一个管道
+                dup2(pipes[i][1], STDOUT_FILENO);
+                close(pipes[i][0]);
+                close(pipes[i][1]);
+            }
+            // 执行命令
+            std::vector<std::string> args = parseInput(parsed[i]);
+            std::vector<const char*> argv;
+            for (const auto& arg : args) {
+                argv.push_back(arg.c_str());
+            }
+            argv.push_back(nullptr);
+            std::string cmd_path = findCmdInPath(argv[0]);
+            if (!cmd_path.empty()) {
+                execvp(cmd_path.c_str(), (char**)argv.data());
+            } else {
+                execvp(argv[0], (char**)argv.data());
+            }
+            exit(1);
+        } else if (pid > 0) {
+            pids[i] = pid;
+            // 父进程
+            if (i > 0) {
+                close(pipes[i-1][0]);
+            }
+            if (i < num_pipes) {
+                close(pipes[i][1]);
+            }
+        } else {
+            std::cerr << "fork failed" << std::endl;
+        }
+    }
+
+    if (pids[num_command - 1] > 0) {
+        Job new_job = Jobs::instance().CreateJob(pids[num_command - 1], command);
+        for (int j = 0; j < num_command; j++) {
+            new_job.addProcess(pids[j]);
+        }
+        auto processes = new_job.getProcesses();
+        for (auto process : processes) {
+            process.setState(State::RUNNING);
+        }
+        new_job.checkAndUpdateState();
+        std::cout << "[" << new_job.getJobId() << "] " << new_job.getPgid() << std::endl;
+    }
+}
 }
