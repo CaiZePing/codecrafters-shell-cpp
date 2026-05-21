@@ -1,7 +1,7 @@
 #include "command.hpp"
 
 namespace cmd {
-const std::unordered_set<std::string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd", "complete", "jobs"};
+const std::unordered_set<std::string> BUILTIN_COMMANDS{"echo", "type", "exit", "pwd", "cd", "complete", "jobs" , "history"};
 
 std::vector<std::string> executables{};              // 存储所有可执行文件
 std::unordered_map<std::string, std::string> completes{}; // 存储注册命令
