@@ -422,7 +422,7 @@ void pipebgexecv(const std::vector<std::string>& parsed, std::string command) {
         if (pid == 0) {
             if (i == 0) setpgid(0, 0);
             else {
-                setpgid(pid, pid[0]);
+                setpgid(pid, pids[0]);
             }
             // 子进程
             if (i > 0) {
