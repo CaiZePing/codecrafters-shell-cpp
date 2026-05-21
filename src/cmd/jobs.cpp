@@ -46,8 +46,15 @@ Job& Jobs::getJobByPgid(pid_t pgid) {
     throw std::invalid_argument("Job not found");
 }
 void Jobs::showJobs() {
-    for (auto &job : jobs) {
-        std::cout << std::format("[{}]+  {:27}{}", job.getJobId(), "Running", job.getCommand()) << std::endl;
+    for (int i = 0; i < jobs.size(); i++) {
+        const auto& job = jobs[i];
+        if (i == jobs.size() - 1) {
+            std::cout << std::format("[{}]+  {:27}{}", job.getJobId(), "Running", job.getCommand()) << std::endl;
+        } else if (i == jobs.size() - 2) {
+            std::cout << std::format("[{}]-  {:27}{}", job.getJobId(), "Running", job.getCommand()) << std::endl;
+        } else {
+            std::cout << std::format("[{}]   {:27}{}", job.getJobId(), "Running", job.getCommand()) << std::endl;
+        }
     }
 }
 
