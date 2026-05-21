@@ -35,10 +35,12 @@ void declare(const std::vector<std::string>& parsed) {
 
 void handleVariable(std::vector<std::string>& parsed) {
     for (auto& it : parsed) {
-        if (it[0] == '$') {
-            std::string key = it.substr(1);
+        int pos = it.find('$');
+        if (pos != std::string::npos) {
+            std::string temp = it.substr(0, pos);
+            std::string key = it.substr(pos + 1);
             if (variables.find(key) != variables.end()) {
-                it = variables[key];
+                it = temp + variables[key];
             }
         }
     }
